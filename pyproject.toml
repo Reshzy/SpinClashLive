@@ -29,7 +29,13 @@ dev = [
     "mypy>=1.13.0",
     "pytest>=8.3.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-qt>=4.4.0",
     "ruff>=0.8.0",
+]
+desktop = [
+    "PySide6>=6.8.0",
+    "keyring>=25.5.0",
+    "pyinstaller>=6.11.0",
 ]
 
 [project.scripts]
@@ -37,27 +43,29 @@ color-rush-demo = "color_rush.demo:main"
 color-rush-worker = "color_rush.workers.__main__:main"
 color-rush-api = "color_rush.api.app:run"
 color-rush-bootstrap = "color_rush.bootstrap:main"
+color-rush-desktop = "color_rush_desktop.__main__:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["backend/src/color_rush"]
+packages = ["backend/src/color_rush", "desktop/src/color_rush_desktop"]
 
 [tool.hatch.build.targets.wheel.sources]
 "backend/src" = ""
+"desktop/src" = ""
 
 [tool.uv]
 package = true
 
 [tool.hatch.build]
-dev-mode-dirs = ["backend/src"]
+dev-mode-dirs = ["backend/src", "desktop/src"]
 
 [tool.ruff]
 line-length = 120
 target-version = "py312"
-src = ["backend/src", "backend/tests", "scripts"]
+src = ["backend/src", "backend/tests", "desktop/src", "desktop/tests", "scripts"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
@@ -65,12 +73,15 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 "backend/migrations/*" = ["E501"]
 "backend/src/color_rush/infrastructure/youtube/generated/*" = ["E", "F", "I", "UP", "B", "SIM"]
+"desktop/src/color_rush_desktop/views/*" = ["E501"]
+"desktop/src/color_rush_desktop/theme.py" = ["E501"]
+"desktop/tests/*" = ["E501"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-mypy_path = "backend/src"
-packages = ["color_rush"]
+mypy_path = "backend/src,desktop/src"
+packages = ["color_rush", "color_rush_desktop"]
 exclude = ["backend/migrations", "backend/tests"]
 plugins = ["pydantic.mypy"]
 
@@ -84,6 +95,8 @@ module = [
     "grpc.*",
     "prometheus_client",
     "google.*",
+    "keyring",
+    "keyring.*",
     "color_rush.infrastructure.youtube.generated.*",
 ]
 ignore_missing_imports = true
@@ -92,15 +105,20 @@ ignore_missing_imports = true
 module = ["color_rush.infrastructure.youtube.generated.*"]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = ["color_rush_desktop.views.*"]
+disable_error_code = ["func-returns-value", "union-attr", "type-arg"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
-testpaths = ["backend/tests"]
-pythonpath = ["backend/src"]
+testpaths = ["backend/tests", "desktop/tests"]
+pythonpath = ["backend/src", "desktop/src"]
 markers = [
     "domain: pure domain tests (no database)",
     "integration: PostgreSQL integration tests",
     "redis: Redis integration tests",
+    "qt: PySide6 operator console tests",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

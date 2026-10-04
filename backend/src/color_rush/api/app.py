@@ -10,7 +10,7 @@ from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -100,6 +100,46 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
     app.include_router(ws_router)
     if settings.is_simulation:
         _mount_simulation(app)
+
+    @app.get("/overlay")
+    def overlay_placeholder() -> HTMLResponse:
+        return HTMLResponse(
+            """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Color Rush Live overlay</title>
+<style>
+body {
+  margin: 0;
+  background: #111;
+  color: #f4f4f4;
+  font: 20px/1.4 Segoe UI, sans-serif;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+main { text-align: center; max-width: 720px; padding: 32px; }
+.kicker {
+  color: #ff8a3d;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">OBS Browser Source</p>
+<h1>Color Rush Live</h1>
+<p>This placeholder confirms the overlay URL and scoped ticket fragment.</p>
+<p>The production overlay ships in milestone 4.</p>
+<p>Recommended sizes: 1920x1080 and 1280x720.</p>
+</main>
+</body>
+</html>
+"""
+        )
 
     @app.middleware("http")
     async def _limits(request: Request, call_next):  # type: ignore[no-untyped-def]

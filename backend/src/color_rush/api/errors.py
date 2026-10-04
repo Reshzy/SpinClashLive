@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from color_rush.domain.errors import (
     AuthError,
+    ConfigurationError,
     ConflictError,
     DrainFailedError,
     FencingError,
@@ -45,8 +46,9 @@ async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse
         (IllegalTransitionError, 409, "illegal_transition"),
         (SettlementError, 409, "settlement_error"),
         (DrainFailedError, 409, "drain_failed"),
-        (InvalidRulesError, 422, "invalid_rules"),
         (InvalidCommandError, 422, "invalid_input"),
+        (InvalidRulesError, 422, "invalid_rules"),
+        (ConfigurationError, 422, "invalid_input"),
     ]
     for exc_type, status, code in mapping:
         if isinstance(exc, exc_type):

@@ -139,6 +139,8 @@ def revoke_google_credentials(session: Session, game_id: UUID, now: datetime) ->
 def _oauth_access_token(session: Session, settings: Settings, game_id: UUID) -> str | None:
     from sqlalchemy import select
 
+    from color_rush.application.youtube_oauth import refresh_access_token
+
     row = session.scalar(
         select(GoogleCredential).where(
             GoogleCredential.game_id == game_id,
@@ -149,6 +151,7 @@ def _oauth_access_token(session: Session, settings: Settings, game_id: UUID) -> 
     if row is None:
         return None
     try:
-        return decrypt_secret(settings.secret_key, row.encrypted_payload)
+        refresh_token = decrypt_secret(settings.secret_key, row.encrypted_payload)
     except Exception:
         return None
+    return refresh_access_token(settings, refresh_token)

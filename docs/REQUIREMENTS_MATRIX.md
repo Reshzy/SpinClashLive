@@ -34,7 +34,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R3.4 | OBS overlay | M4 | overlay skeleton only in M1 | — |
 | R3.5 | Manual/auto, durable ingest, scoring, pause/cancel, bonuses | M1 | application services | integration tests |
 | R3.6 | Four leaderboards, ranks, archives, champions | M1 SQL; M2 Redis; M4 display | settlement + periods | period tests |
-| R3.7 | Operator console pages | M3 | desktop skeleton in M1 | — |
+| R3.7 | Operator console pages | M3 | `desktop/src/color_rush_desktop` nine pages + login | `pytest desktop/tests` 9 passed |
 | R3.8 | Prestige badges from finalized periods | M2/M4 | champion records in M1 | archive tests |
 | R3.9 | Backpressure, metrics, load, packaging, ops docs | M5 (M1 health only) | `/health/*` | health tests |
 | R3.10 | Later extensions documented, not built | M1 docs | DECISIONS + this matrix | review |
@@ -44,7 +44,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
 | R4.1 | Python 3.12 baseline + lockfile | M1 | `pyproject.toml`, `uv.lock` | `uv lock` / `uv run` |
-| R4.2 | PySide6 desktop | M3 | skeleton in M1 | — |
+| R4.2 | PySide6 desktop | M3 | `desktop/src/color_rush_desktop` | `uv run pytest desktop/tests` **9 passed** (offscreen); native PyInstaller artifact optional |
 | R4.3 | FastAPI / Pydantic | M1 health+sim; M2 full API | `color_rush.api` | OpenAPI export + route tests passed |
 | R4.4 | PostgreSQL, SQLAlchemy 2, Alembic | M1 | models + migrations | `alembic upgrade head` to `0002_m2_auth_source` on `color_rush_sim` / fresh `color_rush_test` |
 | R4.5 | Redis projections/streams | M2 | `infrastructure/redis` | `test_stale_projection_cannot_overwrite`, `test_zero_score_tie_order_matches_sql_policy`, `test_outbox_pending_recovery_dead_letters` passed |
@@ -141,7 +141,15 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| R13.* | All console pages and networking | M3 | desktop skeleton in M1 | — |
+| R13.1 | Dark sidebar console, 9 pages, orange accent | M3 | `desktop/src/color_rush_desktop/views` | `test_login_error_and_shell_pages` passed |
+| R13.2 | Nonblocking QThread+httpx; GUI-thread mutations | M3 | `api_client/worker.py`, `viewmodels/session.py` | `test_slow_network_keeps_ui_clickable` passed |
+| R13.3 | Real authenticated actions, no optimistic round state | M3 | Dashboard/YouTube/… pages | `test_failed_action_keeps_round_state` passed |
+| R13.4 | Login/refresh/keyring; Google via system browser | M3 | login + YouTube page + backend OAuth routes | OAuth unit tests passed; live Google **blocked** |
+| R13.5 | Players/leaderboards pagination, ranks, champions | M3 | players/leaderboards pages + cursor APIs | Qt + route registration tests |
+| R13.6 | Overlay tickets, OBS URL, 1080/720 instructions | M3 | overlay_setup page; `/overlay` stub | grab screenshot test; M4 replaces overlay UI |
+| R13.7 | Roles hide and server-enforce | M3 | `roles.py` + backend WRITE_ROLES | `test_moderator_cannot_save_settings` passed |
+| R13.8 | Close console does not stop backend | M3 | no process kill; documented | `test_operator_smoke_against_running_api` + `test_shutdown_cancels_worker` |
+| A9 | Console stays responsive | M3 | QThread worker | `test_slow_network_keeps_ui_clickable` passed |
 
 ## Master §14 Overlay
 
@@ -177,7 +185,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | A6 | Period/DST/clock tests | M1 | periods | midnight, Monday, season PG tests passed |
 | A7 | SQL/Redis ties; archives once | M1 SQL; M2 Redis | ranking + Redis ZADD | PG zero-point ties + `test_zero_score_tie_order_matches_sql_policy` passed |
 | A8 | Pause/cancel/auto/bonus/unhealthy source | M1 controls; M2 source | coordinator + source_health | pause/cancel/bonus PG tests + `test_source_lag_pauses_new_rounds` passed |
-| A9 | Console responsiveness | M3 | — | — |
+| A9 | Console responsiveness | M3 | QThread + Dashboard | `test_slow_network_keeps_ui_clickable` passed |
 | A10–A11 | Overlay landing / safety | M4 | — | — |
 | A12 | Token/retention tests | M2 | JWT expiry, overlay tickets, 7-day command purge | `test_password_and_jwt_roundtrip`; live YouTube token revoke **blocked** |
 | A13 | Capacity evidence | M5 | — | — |

@@ -66,7 +66,10 @@ Ordinary choices resolved during milestone 1. Update when a decision changes a c
 | API process | Uvicorn + FastAPI `/api/v1` + `/ws/v1`; no scheduler in Uvicorn | Console/overlay clients |
 | Worker process | `python -m color_rush.workers` with `COLOR_RUSH_WORKER_ROLE` | coordinator,ingest,settlement,outbox,projection,gateway,retention,all |
 | Compose services | `api`, `worker`, `postgres`, `redis` | Redis required for projections/WS |
-| Desktop / overlay | Skeleton directories only | Milestone 3 / 4 |
+| Desktop / overlay | PySide6 console in M3; overlay still M4 | Console is API client only |
+| Desktop networking | QThread + httpx REST; QWebSocket on GUI thread | Master: one nonblocking strategy; all widget updates on GUI thread |
+| Desktop secrets | OS keyring service `color-rush-live` stores refresh token + API base | Never Google tokens or SQL/Redis |
+| Desktop packaging | PyInstaller spec `desktop/packaging/color_rush_desktop.spec` | Exclude .env and simulation data |
 
 ## Vocabulary
 

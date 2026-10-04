@@ -2,7 +2,7 @@
 
 YouTube livestream color-prediction game. The Python backend owns rules, rounds, picks, results, and scores. This repository root is the project root.
 
-Milestone 2 delivers the durable backend: YouTube/simulation ingest, authenticated `/api/v1` + WebSockets, Redis projections, and 4 Hz snapshots. The desktop console and OBS overlay remain skeletons until later milestones.
+Milestone 3 delivers the native PySide6 operator console against `/api/v1`. The OBS overlay remains a milestone 4 surface; `/overlay` currently serves a placeholder page.
 
 ## Prerequisites
 
@@ -15,7 +15,7 @@ Milestone 2 delivers the durable backend: YouTube/simulation ingest, authenticat
 ```powershell
 $env:Path = "$env:USERPROFILE\.local\bin;$env:Path"
 uv python install 3.12
-uv sync --extra dev
+uv sync --extra dev --extra desktop
 Copy-Item .env.example .env
 docker compose up -d postgres redis
 uv run alembic upgrade head
@@ -27,12 +27,13 @@ If host port 5432 is already a different PostgreSQL, use Compose port **5433** i
 Run tests:
 
 ```powershell
-uv run ruff check backend/src backend/tests
+uv run ruff check backend/src backend/tests desktop/src desktop/tests
 uv run mypy
 uv run pytest backend/tests/domain
 # requires Compose PostgreSQL
 $env:COLOR_RUSH_TEST_DATABASE_URL = "postgresql+psycopg://color_rush:color_rush@127.0.0.1:5432/color_rush_test"
 $env:COLOR_RUSH_TEST_REDIS_URL = "redis://127.0.0.1:6379/15"
+$env:QT_QPA_PLATFORM = "offscreen"
 uv run pytest
 ```
 
@@ -76,6 +77,20 @@ $env:COLOR_RUSH_WORKER_ROLE = "all"
 uv run python -m color_rush.workers
 ```
 
+Desktop console (does not stop the backend when closed):
+
+```powershell
+uv sync --extra desktop
+$env:COLOR_RUSH_API_BASE = "http://127.0.0.1:8000"
+uv run python -m color_rush_desktop
+```
+
+Packaging (Windows):
+
+```powershell
+uv run pyinstaller desktop/packaging/color_rush_desktop.spec
+```
+
 Full stack:
 
 ```powershell
@@ -87,7 +102,7 @@ docker compose up --build
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
 uv python install 3.12
-uv sync --extra dev
+uv sync --extra dev --extra desktop
 cp .env.example .env
 docker compose up -d postgres redis
 uv run alembic upgrade head

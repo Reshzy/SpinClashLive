@@ -111,6 +111,20 @@ class OverlayTicketCreated(BaseModel):
     obs_url: str
 
 
+class YoutubeOAuthStartRequest(BaseModel):
+    game_id: UUID
+
+
+class YoutubeOAuthRevokeRequest(BaseModel):
+    game_id: UUID
+
+
+class AdminUserCreateRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=64)
+    password: str = Field(min_length=8, max_length=128)
+    role: str = Field(min_length=4, max_length=32)
+
+
 class SimCommand(BaseModel):
     session_id: str
     broadcast_id: str = "sim-broadcast"

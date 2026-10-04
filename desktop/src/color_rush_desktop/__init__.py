@@ -1,1 +1,3 @@
-"""PySide6 operator console package. Implemented in milestone 3."""
+"""Color Rush Live native operator console."""
+
+__version__ = "0.1.0"

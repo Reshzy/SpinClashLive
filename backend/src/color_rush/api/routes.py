@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from html import escape
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -16,6 +18,7 @@ from color_rush.api.deps import (
 )
 from color_rush.api.errors import http_error, request_id_of
 from color_rush.api.schemas import (
+    AdminUserCreateRequest,
     AutoModeRequest,
     CancelRequest,
     GameCreateRequest,
@@ -32,14 +35,18 @@ from color_rush.api.schemas import (
     SettingsPutRequest,
     TokenResponse,
     YoutubeConnectRequest,
+    YoutubeOAuthRevokeRequest,
+    YoutubeOAuthStartRequest,
 )
-from color_rush.application.auth import login, logout, refresh_tokens, require_role
+from color_rush.application.auth import create_admin_user, list_admin_users, login, logout, refresh_tokens, require_role
 from color_rush.application.moderation import set_moderation
 from color_rush.application.outbox import sweep_incomplete_jobs
 from color_rush.application.overlay_tickets import create_overlay_ticket, list_overlay_tickets, revoke_overlay_ticket
 from color_rush.application.periods import finalize_due_periods
 from color_rush.application.players import (
     delete_player_data,
+    list_archives,
+    list_champions,
     list_leaderboard,
     list_periods,
     list_players,
@@ -51,14 +58,17 @@ from color_rush.application.settings import put_settings
 from color_rush.application.snapshots import cached_or_build
 from color_rush.application.source_health import session_source_health
 from color_rush.application.youtube_connect import connect_youtube, disconnect_youtube
+from color_rush.application.youtube_oauth import complete_oauth_callback, oauth_status, revoke_oauth, start_oauth
 from color_rush.composition import AppContainer
 from color_rush.domain.clock import utc_now
 from color_rush.domain.enums import AdminRole
+from color_rush.domain.errors import InvalidCommandError
 from color_rush.infrastructure.persistence.models import (
     AdminAction,
     AdminUser,
     Game,
     GameSession,
+    Player,
     Round,
     SourceCheckpoint,
 )
@@ -140,17 +150,72 @@ def get_leaderboards(
     scope: str = "weekly",
     period_id: UUID | None = None,
     game_id: UUID | None = None,
+    cursor: int = 0,
+    limit: int = 50,
 ) -> dict[str, Any]:
     del user
+    page_size = min(max(limit, 1), 100)
+    offset = max(cursor, 0)
     if period_id is None:
         if game_id is None:
             game_session = _active_session(session, None)
             game_id = game_session.game_id
         periods = list_periods(session, game_id, scope)
         if not periods:
-            return {"scope": scope, "entries": []}
+            return {"scope": scope, "entries": [], "next_cursor": None}
         period_id = periods[0].id
-    return {"scope": scope, "period_id": str(period_id), "entries": list_leaderboard(session, period_id=period_id)}
+    entries = list_leaderboard(session, period_id=period_id, limit=page_size, cursor=offset)
+    next_cursor = offset + page_size if len(entries) == page_size else None
+    return {"scope": scope, "period_id": str(period_id), "entries": entries, "next_cursor": next_cursor}
+
+
+@game_router.get("/periods/{period_id}/champions")
+def get_period_champions(
+    period_id: UUID,
+    session: Annotated[Session, Depends(db_session)],
+    user: Annotated[AdminUser, Depends(current_user)],
+) -> dict[str, Any]:
+    del user
+    rows = list_champions(session, period_id)
+    items = []
+    for row in rows:
+        player = session.get(Player, row.player_id)
+        items.append(
+            {
+                "award_type": row.award_type,
+                "player_id": str(row.player_id),
+                "display_name": player.display_name if player else "[unknown]",
+                "display_title": row.display_title,
+                "created_at": row.created_at.isoformat(),
+            }
+        )
+    return {"period_id": str(period_id), "items": items}
+
+
+@game_router.get("/periods/{period_id}/archives")
+def get_period_archives(
+    period_id: UUID,
+    session: Annotated[Session, Depends(db_session)],
+    user: Annotated[AdminUser, Depends(current_user)],
+) -> dict[str, Any]:
+    del user
+    rows = list_archives(session, period_id)
+    items = []
+    for row in rows:
+        player = session.get(Player, row.player_id)
+        items.append(
+            {
+                "rank": row.final_rank,
+                "player_id": str(row.player_id),
+                "display_name": player.display_name if player else "[unknown]",
+                "points": row.points,
+                "correct_picks": row.correct_picks,
+                "rounds_played": row.rounds_played,
+                "gold_wins": row.gold_wins,
+                "best_streak": row.best_streak,
+            }
+        )
+    return {"period_id": str(period_id), "items": items}
 
 
 @game_router.get("/players")
@@ -627,6 +692,117 @@ def admin_yt_disconnect(
         request_id=request.headers.get("idempotency-key"),
     )
     return {"status": "disconnected"}
+
+
+@admin_router.post("/youtube/oauth/start")
+def admin_yt_oauth_start(
+    body: YoutubeOAuthStartRequest,
+    session: Annotated[Session, Depends(db_session)],
+    container: Annotated[AppContainer, Depends(container_dep)],
+    user: Annotated[AdminUser, Depends(require_permission("youtube"))],
+) -> dict[str, str]:
+    del session
+    return start_oauth(container.settings, game_id=body.game_id, user_id=user.id, now=utc_now())
+
+
+@admin_router.get("/youtube/oauth/callback")
+def admin_yt_oauth_callback(
+    session: Annotated[Session, Depends(db_session)],
+    container: Annotated[AppContainer, Depends(container_dep)],
+    code: str | None = None,
+    state: str | None = None,
+    error: str | None = Query(default=None),
+) -> HTMLResponse:
+    if error or not code or not state:
+        message = error or "missing authorization code"
+        return HTMLResponse(
+            f"<!doctype html><html><body><p>YouTube authorization failed: {escape(message)}</p>"
+            "<p>You can close this window and return to Color Rush Live.</p></body></html>",
+            status_code=400,
+        )
+    try:
+        complete_oauth_callback(session, container.settings, code=code, state=state, now=utc_now())
+    except Exception as exc:
+        return HTMLResponse(
+            f"<!doctype html><html><body><p>YouTube authorization failed: {escape(str(exc))}</p>"
+            "<p>You can close this window and return to Color Rush Live.</p></body></html>",
+            status_code=400,
+        )
+    return HTMLResponse(
+        "<!doctype html><html><body><p>YouTube authorization complete.</p>"
+        "<p>Return to Color Rush Live. You can close this window.</p></body></html>"
+    )
+
+
+@admin_router.get("/youtube/oauth/status")
+def admin_yt_oauth_status(
+    session: Annotated[Session, Depends(db_session)],
+    user: Annotated[AdminUser, Depends(require_permission("youtube"))],
+    game_id: UUID,
+) -> dict[str, Any]:
+    del user
+    return oauth_status(session, game_id)
+
+
+@admin_router.post("/youtube/oauth/revoke")
+def admin_yt_oauth_revoke(
+    body: YoutubeOAuthRevokeRequest,
+    request: Request,
+    session: Annotated[Session, Depends(db_session)],
+    user: Annotated[AdminUser, Depends(require_permission("youtube"))],
+) -> dict[str, Any]:
+    count = revoke_oauth(
+        session,
+        game_id=body.game_id,
+        actor_id=user.id,
+        now=utc_now(),
+        request_id=request.headers.get("idempotency-key"),
+    )
+    return {"status": "revoked", "count": count}
+
+
+@admin_router.get("/users")
+def admin_list_users(
+    session: Annotated[Session, Depends(db_session)],
+    user: Annotated[AdminUser, Depends(require_permission("users"))],
+) -> dict[str, Any]:
+    del user
+    rows = list_admin_users(session)
+    return {
+        "items": [
+            {
+                "id": str(row.id),
+                "username": row.username,
+                "role": row.role,
+                "created_at": row.created_at.isoformat(),
+                "revoked": row.revoked_at is not None,
+            }
+            for row in rows
+        ]
+    }
+
+
+@admin_router.post("/users")
+def admin_create_user(
+    body: AdminUserCreateRequest,
+    request: Request,
+    session: Annotated[Session, Depends(db_session)],
+    user: Annotated[AdminUser, Depends(require_permission("users"))],
+) -> dict[str, str]:
+    try:
+        role = AdminRole(body.role)
+    except ValueError as exc:
+        raise InvalidCommandError("unknown role") from exc
+    row = create_admin_user(
+        session,
+        username=body.username,
+        password=body.password,
+        role=role,
+        actor_id=user.id,
+        now=utc_now(),
+        request_id=request.headers.get("idempotency-key"),
+    )
+    return {"id": str(row.id), "username": row.username, "role": row.role}
 
 
 @admin_router.post("/overlay-tickets", response_model=OverlayTicketCreated)

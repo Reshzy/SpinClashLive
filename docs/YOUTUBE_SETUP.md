@@ -62,6 +62,7 @@ For private/unlisted chat, create **OAuth 2.0 Client ID** (Web application) on t
 ## Authorization
 
 - Operator login (`POST /api/v1/auth/login`) is independent of Google.
+- Console: **Authorize in browser** calls `POST /api/v1/admin/youtube/oauth/start` and opens the system browser. The backend callback is `GET /api/v1/admin/youtube/oauth/callback`. Status/revoke: `/api/v1/admin/youtube/oauth/status` and `/revoke`. Never paste Google passwords or refresh tokens into the UI.
 - `POST /api/v1/admin/youtube/connect` accepts a video ID or supported URL (`watch?v=`, `youtu.be`, `/live/`), resolves `liveStreamingDetails.activeLiveChatId` via `videos.list`, and starts one owned reader.
 - Streaming transport: gRPC `V3DataLiveChatMessageService.StreamList` at `dns:///youtube.googleapis.com:443` using vendored `backend/third_party/youtube/stream_list.proto`.
 - Fallback: HTTP `GET https://www.googleapis.com/youtube/v3/liveChat/messages` respecting `pollingIntervalMillis`.

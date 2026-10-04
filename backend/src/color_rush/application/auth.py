@@ -26,6 +26,7 @@ WRITE_ROLES = {
     "moderation": {AdminRole.OWNER, AdminRole.ADMIN, AdminRole.MODERATOR},
     "settings": {AdminRole.OWNER},
     "seasons": {AdminRole.OWNER},
+    "users": {AdminRole.OWNER},
     "delete": {AdminRole.OWNER},
     "youtube": {AdminRole.OWNER, AdminRole.ADMIN},
     "overlay": {AdminRole.OWNER, AdminRole.ADMIN},
@@ -166,4 +167,44 @@ def get_user(session: Session, user_id: UUID) -> AdminUser:
     user = session.get(AdminUser, user_id)
     if user is None or user.revoked_at is not None:
         raise NotFoundError("user not found")
+    return user
+
+
+def list_admin_users(session: Session) -> list[AdminUser]:
+    return list(session.scalars(select(AdminUser).order_by(AdminUser.created_at.asc())))
+
+
+def create_admin_user(
+    session: Session,
+    *,
+    username: str,
+    password: str,
+    role: AdminRole,
+    actor_id: UUID,
+    now: datetime,
+    request_id: str | None = None,
+) -> AdminUser:
+    existing = session.scalar(select(AdminUser).where(AdminUser.username == username))
+    if existing is not None:
+        raise ConflictError("username already exists")
+    user = AdminUser(
+        id=uuid4(),
+        username=username,
+        password_hash=hash_password(password),
+        role=role.value,
+        created_at=now,
+        revoked_at=None,
+    )
+    session.add(user)
+    record_admin_action(
+        session,
+        actor_id=actor_id,
+        action="users.create",
+        request_id=request_id,
+        reason=None,
+        before=None,
+        after={"username": username, "role": role.value},
+        now=now,
+    )
+    session.flush()
     return user
