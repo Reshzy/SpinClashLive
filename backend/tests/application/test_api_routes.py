@@ -1,10 +1,21 @@
 from color_rush.api.app import create_app
 
 
-def test_health_and_simulation_routes_registered() -> None:
+def test_health_and_versioned_routes_registered() -> None:
     app = create_app()
-    paths = {getattr(route, "path", "") for route in app.routes}
+    paths = set(app.openapi()["paths"])
     assert "/health/live" in paths
     assert "/health/ready" in paths
+    assert "/api/v1/auth/login" in paths
+    assert "/api/v1/auth/refresh" in paths
+    assert "/api/v1/admin/rounds/start" in paths
+    assert "/api/v1/admin/games" in paths
+    assert "/api/v1/admin/sessions" in paths
+    assert "/api/v1/admin/source" in paths
     assert "/simulation/commands" in paths
-    assert "/simulation/rounds/start" in paths
+    assert "/metrics" in paths
+    from color_rush.api.ws import ws_router
+
+    included = {getattr(route, "path", "") for route in ws_router.routes}
+    assert "/ws/v1/overlay" in included
+    assert "/ws/v1/admin" in included

@@ -75,6 +75,8 @@ class DecisionReason(StrEnum):
     IGNORED_LOOKUP = "ignored_lookup"
     IGNORED_HELP = "ignored_help"
     IGNORED_INVALID = "ignored_invalid"
+    THROTTLED_LOOKUP = "throttled_lookup"
+    HELP_COOLDOWN = "help_cooldown"
 
 
 class SettlementJobStatus(StrEnum):
@@ -86,6 +88,35 @@ class SettlementJobStatus(StrEnum):
 
 class ChampionAwardType(StrEnum):
     CHAMPION = "champion"
+
+
+class AdminRole(StrEnum):
+    OWNER = "owner"
+    ADMIN = "admin"
+    MODERATOR = "moderator"
+    OBSERVER = "observer"
+
+
+class SourceHealth(StrEnum):
+    HEALTHY = "healthy"
+    DEGRADED = "degraded"
+    RESYNC = "resync"
+    DISABLED = "disabled"
+    ENDED = "ended"
+    QUOTA = "quota"
+    PERMISSION = "permission"
+    TRANSIENT = "transient"
+
+
+class WorkerRole(StrEnum):
+    COORDINATOR = "coordinator"
+    INGEST = "ingest"
+    SETTLEMENT = "settlement"
+    OUTBOX = "outbox"
+    PROJECTION = "projection"
+    GATEWAY = "gateway"
+    RETENTION = "retention"
+    ALL = "all"
 
 
 PICK_COMMANDS: frozenset[CommandType] = frozenset(

@@ -1,5 +1,11 @@
 # Scripts
 
-Setup, demo, reconciliation, load, and packaging helpers.
+Setup, demo, contract export, YouTube stub generation.
 
-Milestone 1 demo entry: `uv run python -m color_rush.demo`
+```powershell
+uv run python -m color_rush.demo
+uv run python -m color_rush.bootstrap
+uv run python scripts/export_contracts.py
+uv run python scripts/check_contracts.py
+uv run python scripts/generate_youtube_stubs.py
+```

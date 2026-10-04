@@ -38,7 +38,10 @@ Ordinary choices resolved during milestone 1. Update when a decision changes a c
 | --- | --- | --- |
 | Authoritative store | PostgreSQL 16 | Master; SQLite forbidden for concurrency tests |
 | ORM | SQLAlchemy 2.x mapped classes | Master |
-| Migrations | Alembic, one initial revision `0001_initial` | Fresh-DB verification |
+| Migrations | Alembic revision `0001_initial` with explicit PostgreSQL DDL | Fresh-DB verification; not `create_all` |
+| Season overlap | GiST `EXCLUDE` on `tstzrange(starts_at, ends_at, '[)')` per `game_id` (`btree_gist`) | Master: prevent overlapping season intervals |
+| SETTLED gate | `mark_settled` raises unless every `settlement_jobs` row is complete | Caller checks are not sufficient |
+| Host Postgres port | Compose publishes 5432 and 5433 | This host already had another PostgreSQL on 5432 |
 | Advisory lock | `pg_advisory_xact_lock(lock_key)` where `lock_key` is the signed 64-bit mix of the session UUID | Serializes inbox append and ingress closure |
 | Clock in transactions | `SELECT clock_timestamp()` after lock acquisition | Deadline protection when scheduler is late |
 | Sequence allocation | `game_sessions.next_inbox_sequence` incremented under the same lock | Monotonic per session |
@@ -47,17 +50,23 @@ Ordinary choices resolved during milestone 1. Update when a decision changes a c
 | Settlement partitions | `hashtext(player_id::text) % partition_count`; default 8 partitions | Retry-safe batches |
 | Ledger insert | `INSERT ... ON CONFLICT DO NOTHING` returning inserted ids | Zero-point retries must not restreak |
 | Outbox in M1 | SQL `outbox_events` + `projection_jobs` written in the settlement transaction | Redis relay is milestone 2 |
+| Outbox relay | Unpublished SQL rows → Redis Streams `outbox.game` and `outbox.projections`; consumer groups with XPENDING/XCLAIM; DLQ `outbox.dlq` | Crash after XADD may duplicate; `event_id` is idempotent; SQL sweeper republishes if Redis is down |
+| Redis scores | `ZADD` of `-points` so `ZRANGE` ascending matches points desc + UUID asc | Master tie encoding; include zeros |
+| Projection CAS | `score_version` on `leaderboard_scores`; skip writes if incoming version is older | Stale workers cannot overwrite |
+| Overlay tickets | Hashed secret in `overlay_tickets`; WS ticket exchange | Read-only; never operator logs |
+| Operator auth | JWT access + hashed refresh in `admin_sessions`; PBKDF2 password hashes | Separate from Google OAuth |
+| Google secrets | Fernet(SECRET_KEY) encrypted payloads in `google_credentials` | Least scope `youtube.readonly` |
+| YouTube transport | gRPC `streamList` primary; HTTP `liveChatMessages.list` fallback | Official 2026-10-04 docs |
 | Simulation isolation | `COLOR_RUSH_ENV=simulation` and a separate `DATABASE_URL` | Production scores never mix |
 
 ## Process topology
 
 | Decision | Choice | Why |
 | --- | --- | --- |
-| API process | Uvicorn + FastAPI; health + simulation-gated endpoints only in M1 | No implicit scheduler |
-| Worker process | `python -m color_rush.workers` with `COLOR_RUSH_WORKER_ROLE` | Explicit entry; later split by role |
-| Compose services | `api`, `worker`, `postgres`, `redis` | Redis present for later; unused by M1 scoring |
-| Host Docker | Client installed; engine blocked until WSL | Recorded 2026-10-04: `Docker Desktop is unable to start` |
-| Desktop / overlay | Skeleton directories only | Prompt 1 forbids a large GUI/overlay |
+| API process | Uvicorn + FastAPI `/api/v1` + `/ws/v1`; no scheduler in Uvicorn | Console/overlay clients |
+| Worker process | `python -m color_rush.workers` with `COLOR_RUSH_WORKER_ROLE` | coordinator,ingest,settlement,outbox,projection,gateway,retention,all |
+| Compose services | `api`, `worker`, `postgres`, `redis` | Redis required for projections/WS |
+| Desktop / overlay | Skeleton directories only | Milestone 3 / 4 |
 
 ## Vocabulary
 

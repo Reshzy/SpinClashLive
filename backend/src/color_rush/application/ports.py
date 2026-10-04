@@ -1,6 +1,9 @@
 from datetime import datetime
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import UUID
+
+from color_rush.application.dto import NormalizedCommand, SourceBatch, SourceCheckpointData
+from color_rush.domain.enums import SourceHealth
 
 
 class Clock(Protocol):
@@ -9,6 +12,16 @@ class Clock(Protocol):
 
 class Rng(Protocol):
     def below(self, upper: int) -> int: ...
+
+
+class ChatSource(Protocol):
+    def connect(self) -> None: ...
+
+    def disconnect(self) -> None: ...
+
+    def iter_batches(self) -> object: ...
+
+    def health(self) -> SourceHealth: ...
 
 
 class SystemClock:
@@ -53,3 +66,20 @@ class SessionLockKey:
     @staticmethod
     def for_session(session_id: UUID) -> int:
         return int.from_bytes(session_id.bytes[:8], "big", signed=True)
+
+
+__all__ = [
+    "ChatSource",
+    "Clock",
+    "FrozenClock",
+    "NormalizedCommand",
+    "Rng",
+    "SecureRng",
+    "SequenceRng",
+    "SessionLockKey",
+    "SourceBatch",
+    "SourceCheckpointData",
+    "SourceHealth",
+    "SystemClock",
+    "Literal",
+]

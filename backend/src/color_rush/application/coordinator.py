@@ -13,6 +13,7 @@ from color_rush.application.periods import (
     ensure_periods_for,
 )
 from color_rush.application.ports import Clock, Rng
+from color_rush.application.settlement import all_partitions_complete
 from color_rush.domain.enums import (
     OCCUPYING_ROUND_STATES,
     BonusType,
@@ -25,6 +26,7 @@ from color_rush.domain.errors import (
     FencingError,
     IllegalTransitionError,
     RoundBusyError,
+    SettlementError,
 )
 from color_rush.domain.presentation import build_presentation_plan
 from color_rush.domain.rng import select_result
@@ -64,6 +66,7 @@ class Coordinator:
         now = self.clock.now()
         game = Game(id=uuid4(), name=name, created_at=now)
         self.session.add(game)
+        self.session.flush()
         self.session.add(
             ConfigurationVersion(
                 id=uuid4(),
@@ -147,7 +150,31 @@ class Coordinator:
             raise ValueError("unknown session")
         return row
 
-    def set_next_bonus(self, session_id: UUID, bonus: BonusType, gold_reward: int = 28) -> None:
+    def _rules_for_open(self, game_session: GameSession) -> RoundRules:
+        config = self.session.scalar(
+            select(ConfigurationVersion).where(
+                ConfigurationVersion.game_id == game_session.game_id,
+                ConfigurationVersion.version == game_session.config_version,
+            )
+        )
+        if config is not None:
+            data = dict(config.configuration)
+            data["bonus"] = game_session.next_round_bonus
+            data["gold_bonus_reward"] = game_session.next_round_gold_bonus_reward
+            data["timezone"] = game_session.timezone_version
+            data["version"] = game_session.config_version
+            return RoundRules.from_snapshot(data)
+        return RoundRules(
+            bonus=BonusType(game_session.next_round_bonus),
+            gold_bonus_reward=game_session.next_round_gold_bonus_reward,
+            timezone=game_session.timezone_version,
+            version=game_session.config_version,
+        )
+
+    def set_next_bonus(
+        self, session_id: UUID, token: int, bonus: BonusType, gold_reward: int = 28
+    ) -> None:
+        self.require_fence(session_id, token)
         game_session = self._load_session(session_id)
         game_session.next_round_bonus = bonus.value
         game_session.next_round_gold_bonus_reward = gold_reward
@@ -182,6 +209,17 @@ class Coordinator:
         game_session = self._load_session(session_id)
         if game_session.paused:
             raise RoundBusyError("session is paused")
+        from color_rush.application.source_health import source_blocks_new_rounds
+        from color_rush.config import get_settings
+
+        settings = get_settings()
+        if source_blocks_new_rounds(
+            self.session,
+            game_session,
+            lag_pause_ms=settings.source_lag_pause_ms,
+            backlog_pause=settings.source_backlog_pause,
+        ):
+            raise RoundBusyError("source is unhealthy")
         occupying = self.session.scalar(
             select(Round).where(
                 Round.session_id == session_id,
@@ -193,12 +231,7 @@ class Coordinator:
         last_number = self.session.scalar(
             select(func.max(Round.number)).where(Round.session_id == session_id)
         )
-        snapshot_rules = rules or RoundRules(
-            bonus=BonusType(game_session.next_round_bonus),
-            gold_bonus_reward=game_session.next_round_gold_bonus_reward,
-            timezone=game_session.timezone_version,
-            version=game_session.config_version,
-        )
+        snapshot_rules = rules or self._rules_for_open(game_session)
         snapshot_rules.validate()
         ensure_covering_season(self.session, game_session.game_id, now, game_session.timezone_version)
         rnd = Round(
@@ -395,6 +428,8 @@ class Coordinator:
         if rnd is None:
             raise IllegalTransitionError("no active round")
         require_transition(RoundState(rnd.state), RoundState.SETTLED)
+        if not all_partitions_complete(self.session, rnd.id):
+            raise SettlementError("settlement partitions incomplete")
         now = self.clock.now()
         rnd.state = RoundState.SETTLED.value
         rnd.revision += 1

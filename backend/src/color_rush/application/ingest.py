@@ -50,11 +50,14 @@ def _get_or_create_player(
             profile_refreshed_at=None,
             created_at=received_at,
             last_seen_at=received_at,
+            deleted_at=None,
+            anonymized_at=None,
         )
         session.add(player)
         session.flush()
         return player
-    player.display_name = command.display_name[:128]
+    if player.deleted_at is None:
+        player.display_name = command.display_name[:128]
     player.last_seen_at = received_at
     return player
 
@@ -112,10 +115,14 @@ def append_and_process(
             reason = DecisionReason.IGNORED_INVALID
             status = ProcessingStatus.IGNORED
         elif parsed in {CommandType.SCORE, CommandType.RANK}:
-            reason = DecisionReason.IGNORED_LOOKUP
+            from color_rush.application.lookup import classify_lookup
+
+            reason = classify_lookup(session, player.id, session_id, received_at)
             status = ProcessingStatus.IGNORED
         elif parsed is CommandType.HELP:
-            reason = DecisionReason.IGNORED_HELP
+            from color_rush.application.lookup import classify_help
+
+            reason = classify_help(session, game_session, received_at)
             status = ProcessingStatus.IGNORED
         else:
             reason = DecisionReason.REJECTED_NOT_OPEN
@@ -152,6 +159,12 @@ def append_and_process(
             row.decision_reason = DecisionReason.REJECTED_BLOCKED.value
             decisions.append(DecisionReason.REJECTED_BLOCKED)
             continue
+        player_row = session.get(Player, row.player_id)
+        if player_row is not None and player_row.deleted_at is not None:
+            row.processing_status = ProcessingStatus.REJECTED.value
+            row.decision_reason = DecisionReason.REJECTED_BLOCKED.value
+            decisions.append(DecisionReason.REJECTED_BLOCKED)
+            continue
         if active_round is None:
             row.processing_status = ProcessingStatus.REJECTED.value
             row.decision_reason = DecisionReason.REJECTED_NOT_OPEN.value
@@ -184,6 +197,10 @@ def append_and_process(
                     source_mode=checkpoint.source_mode,
                     last_success_at=received_at,
                     ownership_token=checkpoint.ownership_token,
+                    session_id=checkpoint.session_id,
+                    resync_required=checkpoint.resync_required,
+                    error_class=checkpoint.error_class,
+                    lag_ms=checkpoint.lag_ms,
                 )
             )
         else:
@@ -191,6 +208,11 @@ def append_and_process(
             existing.source_mode = checkpoint.source_mode
             existing.last_success_at = received_at
             existing.ownership_token = checkpoint.ownership_token
+            if checkpoint.session_id is not None:
+                existing.session_id = checkpoint.session_id
+            existing.resync_required = checkpoint.resync_required
+            existing.error_class = checkpoint.error_class
+            existing.lag_ms = checkpoint.lag_ms
 
     game_session.updated_at = received_at
     return IngestResult(tuple(sequences), tuple(decisions), received_at)
@@ -241,6 +263,7 @@ def _apply_inbox_pick(
     row.processing_status = ProcessingStatus.ACCEPTED.value
     row.decision_reason = result.reason.value
     row.candidate_round_id = active_round.id
+    session.flush()
     return result.reason
 
 
@@ -267,6 +290,14 @@ def process_eligible_inbox(session: Session, round_id: UUID) -> int:
         if row.processing_status == ProcessingStatus.ACCEPTED.value:
             continue
         command = CommandType(row.command)
+        game_session = session.get(GameSession, rnd.session_id)
+        if game_session is not None and _is_blocked(
+            session, row.player_id, rnd.session_id, game_session.game_id
+        ):
+            row.processing_status = ProcessingStatus.REJECTED.value
+            row.decision_reason = DecisionReason.REJECTED_BLOCKED.value
+            processed += 1
+            continue
         reject = classify_pick_eligibility(
             round_state=RoundState.DRAINING,
             opened_at=rnd.opened_at,

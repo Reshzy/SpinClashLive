@@ -2,7 +2,7 @@
 
 Working product name: Color Rush Live  
 Repository root: this folder (`SpinClashLive`)  
-Current milestone: 1 — Foundation, authoritative rules and durable scoring
+Current milestone: 2 — YouTube ingest, secure API, realtime projections — **closed**
 
 ## Environment
 
@@ -14,88 +14,98 @@ Current milestone: 1 — Foundation, authoritative rules and durable scoring
 | Lockfile | `uv.lock` resolved 2026-10-04 |
 | Ruff | 0.16.10 |
 | mypy | 1.20.0 (strict on `color_rush`) |
-| Docker client | 29.8.1 at `%LOCALAPPDATA%\Programs\DockerDesktop\resources\bin\docker.exe` |
+| Docker client | 29.8.1 |
 | Docker Compose | v5.5.1 |
-| Docker engine | **Blocked** — `docker info` returns `Docker Desktop is unable to start` (WSL is not installed; `wsl --install` requires Administrator) |
-| PostgreSQL / Redis | Not running locally; Compose services defined |
+| Docker engine | Running (WSL2) |
+| PostgreSQL 16 | Compose `postgres:16-alpine`, healthy. Host port **5433** used for verification because host **5432** already has another PostgreSQL. Compose also maps 5432. |
+| Redis 7 | Compose `redis:7-alpine`, healthy. Test isolation uses DB **15**. |
 
-## Commands that actually ran
+## Commands that actually ran (milestone 2 close-out)
 
 ```text
-uv python install 3.12
-uv lock
-uv sync --extra dev
-uv run ruff check backend/src backend/tests
+uv run ruff check backend/src backend/tests scripts
 # All checks passed
 uv run mypy
-# Success: no issues found in 38 source files
+# Success: no issues found in 70 source files
+docker compose up -d postgres redis
+# both already Running / healthy
+DATABASE_URL=postgresql+psycopg://color_rush:color_rush@127.0.0.1:5433/color_rush_sim
+uv run alembic upgrade head
+# Running upgrade 0001_initial -> 0002_m2_auth_source
+COLOR_RUSH_TEST_DATABASE_URL=postgresql+psycopg://color_rush:color_rush@127.0.0.1:5433/color_rush_test
+COLOR_RUSH_TEST_REDIS_URL=redis://127.0.0.1:6379/15
 uv run pytest backend/tests
-# 37 passed, 11 skipped in ~1.3s
-docker compose config --quiet
-# success after .env.example copy / optional env_file
-docker info
-# Error response from daemon: Docker Desktop is unable to start
+# 74 passed in 4.27s
+uv run python scripts/export_contracts.py
+# wrote contracts/openapi.json and contracts/ts/api.d.ts
+uv run python scripts/check_contracts.py
+# contracts ok
 ```
 
-Skipped tests are `backend/tests/integration/*` because `COLOR_RUSH_TEST_DATABASE_URL` / a reachable PostgreSQL is missing.
+Live YouTube private-stream acceptance was **not** run. `GOOGLE_API_KEY` is unset in this environment.
+
+```powershell
+$env:GOOGLE_API_KEY = "<restricted-key>"
+$env:COLOR_RUSH_ENV = "production"
+uv run alembic upgrade head
+uv run python -m color_rush.bootstrap
+# login as owner, POST /api/v1/admin/youtube/connect with the private video id
+# confirm source health is healthy, send !red in chat, confirm an inbox row
+```
+
+**Blocked** — credentials missing. Fixture tests in `backend/tests/application/test_youtube_contracts.py` check official JSON/gRPC shapes only; they do not prove live API access.
 
 ## Milestone status
 
 | Milestone | Status |
 | --- | --- |
-| 1 Foundation, rules, durable scoring | Implementation complete. Domain/quality gates passed. PostgreSQL integration, Alembic-on-fresh-DB, and CLI demo are **blocked** on Docker/WSL. |
-| 2 YouTube ingest, API, realtime projections | Not started — wait until the commands below pass |
+| 1 Foundation, rules, durable scoring | **Complete.** |
+| 2 YouTube ingest, API, realtime projections | **Complete** locally (Postgres + Redis + contracts). Live YouTube **blocked** without credentials. |
 | 3 PySide6 operator console | Not started |
 | 4 OBS overlay | Not started |
 | 5 Reliability, scale, packaging | Not started |
 
-## Runnable verification after Docker starts
+## Demo / API instructions
 
-Windows PowerShell:
+Windows PowerShell (this machine uses Compose host port 5433):
 
 ```powershell
 $env:Path = "$env:USERPROFILE\.local\bin;$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin;$env:Path"
-# Install WSL as Administrator first: wsl --install
 docker compose up -d postgres redis
 $env:COLOR_RUSH_ENV = "simulation"
-$env:COLOR_RUSH_TEST_DATABASE_URL = "postgresql+psycopg://color_rush:color_rush@127.0.0.1:5432/color_rush_test"
-$env:DATABASE_URL = "postgresql+psycopg://color_rush:color_rush@127.0.0.1:5432/color_rush_sim"
+$env:DATABASE_URL = "postgresql+psycopg://color_rush:color_rush@127.0.0.1:5433/color_rush_sim"
+$env:COLOR_RUSH_TEST_DATABASE_URL = "postgresql+psycopg://color_rush:color_rush@127.0.0.1:5433/color_rush_test"
+$env:COLOR_RUSH_TEST_REDIS_URL = "redis://127.0.0.1:6379/15"
 uv run alembic upgrade head
+uv run python -m color_rush.bootstrap
 uv run pytest
-uv run python -m color_rush.demo
 uv run python -m uvicorn color_rush.api.app:app --host 127.0.0.1 --port 8000
-# separate terminal
+# other terminal:
+$env:COLOR_RUSH_WORKER_ROLE = "all"
 uv run python -m color_rush.workers
 ```
 
-POSIX equivalents are in `README.md`.
+If host 5432 is free, the same URLs with port 5432 also work.
 
-## Changed modules (milestone 1)
+## Changed modules (milestone 2 close-out)
 
-- `backend/src/color_rush/domain/` — commands, rules, RNG, picks, streaks, states, eligibility, periods, ranking
-- `backend/src/color_rush/application/` — ingest lock protocol, coordinator, settlement, periods
-- `backend/src/color_rush/infrastructure/persistence/` — SQLAlchemy models and DB helpers
-- `backend/src/color_rush/api/app.py` — `/health/*` and simulation-gated endpoints
-- `backend/src/color_rush/workers/` — explicit worker entry (`python -m color_rush.workers`)
-- `backend/src/color_rush/demo.py` — deterministic CLI demo
-- `backend/migrations/versions/0001_initial.py` — Alembic schema
-- `compose.yaml`, `deployment/*.Dockerfile`, `pyproject.toml`, `uv.lock`
-- `desktop/`, `overlay/` skeletons only
+- Alembic `0002_m2_auth_source`: overlay tickets, Google credentials, idempotency keys, source-health columns, player deletion fields
+- ChatSource port + `SimulationChatSource` + official YouTube gRPC `streamList` / HTTP `list` fallback
+- Authenticated `/api/v1` + overlay/admin WebSockets, JWT+refresh, overlay tickets, idempotency
+- Outbox relay to Redis Streams `outbox.game` / `outbox.projections`, pending recovery, DLQ, SQL sweeper
+- Absolute ZADD projections with `-points` tie encoding and `score_version` CAS; 4 Hz snapshots
+- Moderation OPEN-pick removal, settings versions, seasons, lookup/help, source-health pause/cancel, retention/deletion
+- Docs: `docs/YOUTUBE_SETUP.md`, `docs/SECURITY_AND_DATA.md`
 
 ## Architectural decisions
 
-See `docs/DECISIONS.md`. Highlights: session advisory lock + `clock_timestamp()`; fencing token; ledger `ON CONFLICT DO NOTHING`; occupying-round unique index; Redis relay deferred to milestone 2.
+See `docs/DECISIONS.md`.
 
 ## Remaining external prerequisites
 
-1. Administrator `wsl --install` (or enable WSL2) so Docker Desktop can start.
-2. `docker compose up -d postgres redis`
-3. `uv run alembic upgrade head` on a fresh database
-4. `uv run pytest` including integration tests
-5. `uv run python -m color_rush.demo`
+- Live YouTube private-stream script: **blocked** until a restricted API key / OAuth client exists
+- YouTube API-use and retention review still required before production (`docs/SECURITY_AND_DATA.md`)
 
-Never treat those as passed until they are executed.
+## Can milestone 3 begin?
 
-## Can milestone 2 begin?
-
-**No.** Milestone 1 code is in place, but the durable PostgreSQL verification required by prompt 1 has not run. Start milestone 2 only after the integration suite and demo succeed against real PostgreSQL.
+**Yes**, for the operator console. Backend contracts are exported. Do not treat live YouTube as verified.

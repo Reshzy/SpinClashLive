@@ -14,12 +14,12 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R2.4 | Weights 475/475/50 totaling 1000 | M1 | `RoundRules` | `test_weight_boundaries` passed |
 | R2.5 | Rewards +2/+14/+2; incorrect +0 | M1 | `domain/scoring.py` | `test_base_rewards` passed |
 | R2.6 | Free play; no stakes, money, or negative points | M1 | scoring + `ck_ledger_points_nonnegative` | scoring tests passed |
-| R2.7 | One final pick; eligible commands may change it | M1 | `domain/picks.py`, `application/ingest.py` | pick tests passed; PG ingest **blocked** |
+| R2.7 | One final pick; eligible commands may change it | M1 | `domain/picks.py`, `application/ingest.py` | pick tests + PG ingest (`test_duplicate_and_old_sequence_and_change_limit`) passed |
 | R2.8 | Five actual color changes; same-color repeats free | M1 | `apply_pick` | `test_five_changes_then_sixth_rejected` passed |
-| R2.9 | Streak increment/reset/unchanged rules | M1 | `domain/streaks.py` + settlement | streak tests passed; PG retry **blocked** |
-| R2.10 | Internal UUID + provider channel ID; name not identity | M1 | `players` model | schema present; PG **blocked** |
+| R2.9 | Streak increment/reset/unchanged rules | M1 | `domain/streaks.py` + settlement | streak tests + PG retry passed |
+| R2.10 | Internal UUID + provider channel ID; name not identity | M1 | `players` model | schema + PG integration passed |
 | R2.11 | Default timings 30/5/6/5/3 | M1 | `RoundRules` defaults | rules validation passed |
-| R2.12 | Validated versioned config frozen at OPEN | M1 | `configuration_versions` + `rules_snapshot` | code present; PG **blocked** |
+| R2.12 | Validated versioned config frozen at OPEN | M1 | `configuration_versions` + `rules_snapshot` | `alembic upgrade head` + round tests passed |
 | R2.13 | Manual and automatic modes; isolated simulation | M1 | `SessionMode`, `COLOR_RUSH_ENV` | config + worker loop present |
 | R2.14 | Approved vocabulary; Double Points / Gold Bonus | M1 domain; M3/M4 UI | `BonusType` | `test_double_points_bonus`, `test_gold_bonus` passed |
 | R2.15 | One bonus, declared before open, immutable | M1 | `RoundRules.bonus` | bonus tests passed |
@@ -28,9 +28,9 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| R3.1 | Independent backend, migrations, workers | M1 | package + Alembic + worker entry | migrate + pytest |
-| R3.2 | Secure operator API | M2 | — | — |
-| R3.3 | Simulation source + real YouTube source | M2 (sim pipeline starts M1) | M1 sim uses durable path | M1 demo; M2 YouTube |
+| R3.1 | Independent backend, migrations, workers | M1 | package + Alembic + worker entry | `alembic upgrade head` + `pytest` 74 passed |
+| R3.2 | Secure operator API | M2 | `api/routes.py`, JWT, roles, idempotency | `test_auth_roles_and_overlay_ticket` passed |
+| R3.3 | Simulation source + real YouTube source | M2 | `SimulationChatSource`, `YouTubeChatSource` | sim source + YouTube fixture tests passed; live YouTube **blocked** (no `GOOGLE_API_KEY`) |
 | R3.4 | OBS overlay | M4 | overlay skeleton only in M1 | — |
 | R3.5 | Manual/auto, durable ingest, scoring, pause/cancel, bonuses | M1 | application services | integration tests |
 | R3.6 | Four leaderboards, ranks, archives, champions | M1 SQL; M2 Redis; M4 display | settlement + periods | period tests |
@@ -45,14 +45,14 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | --- | --- | --- | --- | --- |
 | R4.1 | Python 3.12 baseline + lockfile | M1 | `pyproject.toml`, `uv.lock` | `uv lock` / `uv run` |
 | R4.2 | PySide6 desktop | M3 | skeleton in M1 | — |
-| R4.3 | FastAPI / Pydantic | M1 health+sim; M2 full API | `color_rush.api` | health tests |
-| R4.4 | PostgreSQL, SQLAlchemy 2, Alembic | M1 | models + migrations | fresh migrate |
-| R4.5 | Redis projections/streams | M2 | Compose Redis in M1 | Compose up |
+| R4.3 | FastAPI / Pydantic | M1 health+sim; M2 full API | `color_rush.api` | OpenAPI export + route tests passed |
+| R4.4 | PostgreSQL, SQLAlchemy 2, Alembic | M1 | models + migrations | `alembic upgrade head` to `0002_m2_auth_source` on `color_rush_sim` / fresh `color_rush_test` |
+| R4.5 | Redis projections/streams | M2 | `infrastructure/redis` | `test_stale_projection_cannot_overwrite`, `test_zero_score_tie_order_matches_sql_policy`, `test_outbox_pending_recovery_dead_letters` passed |
 | R4.6 | Vite/TS/GSAP overlay | M4 | overlay skeleton in M1 | — |
-| R4.7 | Docker Compose backend | M1 | `compose.yaml`, Dockerfiles | compose config / up |
-| R4.8 | pytest, Qt tests, Vitest, Playwright, Locust | M1 pytest; later others | `backend/tests` | `uv run pytest` |
+| R4.7 | Docker Compose backend | M1 | `compose.yaml`, Dockerfiles | `docker compose up -d postgres redis` healthy |
+| R4.8 | pytest, Qt tests, Vitest, Playwright, Locust | M1 pytest; later others | `backend/tests` | `uv run pytest` **74 passed** |
 | R4.9 | Ruff + typecheck | M1 | Ruff/mypy config | `ruff` / `mypy` |
-| R4.10 | No SQLite for concurrency tests | M1 | PG-only integration | integration tests |
+| R4.10 | No SQLite for concurrency tests | M1 | PG-only integration | `test_deadline_closure_race` passed |
 
 ## Master §5 Architecture
 
@@ -61,8 +61,8 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R5.1 | API process + separate worker; no scheduler in Uvicorn | M1 | Compose commands | process inspection |
 | R5.2 | Domain imports no Qt/FastAPI/SQLAlchemy/Redis/YouTube | M1 | `domain/` + lance test | `test_domain_purity` |
 | R5.3 | Ports/interfaces; one composition root | M1 | `application/ports.py`, `composition.py` | import tests |
-| R5.4 | Roles: ingest, coordinator, settlement, projection, gateway, console | M1 first three; M2+ rest | workers + services | integration |
-| R5.5 | Single-session serialized ingest/control boundary | M1 | advisory lock | race tests |
+| R5.4 | Roles: ingest, coordinator, settlement, projection, gateway, console | M1 first three; M2+ rest | `COLOR_RUSH_WORKER_ROLE` coordinator\|ingest\|settlement\|outbox\|projection\|gateway\|retention\|all | workers consume roles |
+| R5.5 | Single-session serialized ingest/control boundary | M1 | advisory lock | `test_deadline_closure_race` passed |
 
 ## Master §6 Durability
 
@@ -76,7 +76,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R6.6 | DRAINING freezes cutoff; late scheduler cannot extend | M1 | coordinator close | deadline tests |
 | R6.7 | Drain bound failure cancels | M1 | coordinator | drain-fail tests |
 | R6.8 | LOCKED only after eligible processing; older sequences cannot overwrite | M1 | pick processor | sequence tests |
-| R6.9 | Outbox same transaction; Redis relay + sweeper | M1 outbox rows; M2 relay | `outbox_events` | settlement tests |
+| R6.9 | Outbox same transaction; Redis relay + sweeper | M1 outbox rows; M2 relay | `outbox.py` + Redis Streams | `test_sim_source_to_settlement_and_redis`, `test_sql_scores_survive_without_redis` passed |
 | R6.10 | Coordinator lease + fencing token | M1 | `coordinator_leases` | stale-owner tests |
 | R6.11 | At most one nonterminal round per session | M1 | unique index | two-start tests |
 
@@ -95,7 +95,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| R8.1 | All listed tables, constraints, indexes | M1 | `models.py` + `0001_initial` | models compiled; `alembic upgrade head` **blocked** (no Postgres) |
+| R8.1 | All listed tables, constraints, indexes | M1 | `models.py` + `0001_initial` | `test_alembic_upgrade_created_schema` passed; `ex_seasons_no_overlap` present |
 
 ## Master §9 Settlement
 
@@ -105,9 +105,9 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R9.2 | Ledger for every participant including zero | M1 | settlement service | zero-point tests |
 | R9.3 | Stats/streaks/four aggregates only on new ledger rows | M1 | settlement service | retry tests |
 | R9.4 | Projection/outbox/cursor same transaction | M1 | settlement service | commit tests |
-| R9.5 | SETTLED only when all partitions complete | M1 | settlement service | partition tests |
+| R9.5 | SETTLED only when all partitions complete | M1 | settlement service + `mark_settled` | `test_mark_settled_requires_all_partitions` passed |
 | R9.6 | No next same-session round before SETTLED | M1 | coordinator start | start-guard tests |
-| R9.7 | Redis absolute ZADD + rebuild | M2 | — | — |
+| R9.7 | Redis absolute ZADD + rebuild | M2 | `infrastructure/redis/projections.py` | stale-version and zero-score tie tests passed |
 
 ## Master §10 Periods and lookup
 
@@ -118,24 +118,24 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R10.3 | CLOSING until attributed rounds done; idempotent finalize | M1 | period finalizer | finalize tests |
 | R10.4 | Top 100 archive + unique champion; empty = no champion | M1 | period finalizer | archive tests |
 | R10.5 | Tie policy displayed in help | M2 help card; M1 domain order | `ranking.py` | ranking tests |
-| R10.6 | Redis key layout and tie encoding | M2 | — | — |
-| R10.7 | Overlay rotation / lookup queue / help cooldown | M2/M4 | — | — |
+| R10.6 | Redis key layout and tie encoding | M2 | `encoded_score` / generation keys | `test_tie_encoding_and_safe_names`, `test_zero_score_tie_order_matches_sql_policy` passed |
+| R10.7 | Overlay rotation / lookup queue / help cooldown | M2/M4 | snapshots + `THROTTLED_LOOKUP` / `HELP_COOLDOWN` | `test_lookup_and_help_cooldown` passed |
 
 ## Master §11 YouTube and simulation
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| R11.1 | Official streamList + list fallback | M2 | — | — |
-| R11.2 | Simulation implements same source interface | M2 (M1 demo injects commands) | M1 `simulation` pipeline | demo |
+| R11.1 | Official streamList + list fallback | M2 | `infrastructure/youtube/` + vendored proto | `test_youtube_contracts.py` fixture shapes passed; live API **blocked** |
+| R11.2 | Simulation implements same source interface | M2 | `ChatSource` + `SimulationChatSource` | `test_simulation_source_covers_required_shapes` passed |
 | R11.3 | Isolated sim data/config | M1 | env + DB URL | config tests |
-| R11.4 | API data vs game data, retention, deletion | M2 `SECURITY_AND_DATA.md` | — | — |
+| R11.4 | API data vs game data, retention, deletion | M2 `SECURITY_AND_DATA.md` | docs + delete-data route | `test_sql_scores_survive_without_redis`; production API-use review still outstanding |
 
 ## Master §12 REST and realtime
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| R12.1 | Versioned `/api/v1` endpoints | M2 (M1 health only) | `/health/live`, `/health/ready` | health tests |
-| R12.2 | Auth, idempotency, overlay tickets, WS | M2 | — | — |
+| R12.1 | Versioned `/api/v1` endpoints | M2 | `api/routes.py` | `test_health_and_versioned_routes_registered`; `scripts/check_contracts.py` ok |
+| R12.2 | Auth, idempotency, overlay tickets, WS | M2 | JWT, overlay tickets, `/ws/v1/*` | `test_auth_roles_and_overlay_ticket` passed (idempotency replay + 409) |
 
 ## Master §13 Console
 
@@ -154,7 +154,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
 | R15.1 | Loopback default; secrets excluded | M1 | `.env.example`, `.gitignore` | file review |
-| R15.2 | Overlay vs operator credentials | M2 | — | — |
+| R15.2 | Overlay vs operator credentials | M2 | overlay tickets vs JWT; Google secrets Fernet | overlay ticket tests; `SECURITY_AND_DATA.md` |
 | R15.3 | Compose healthchecks, least privilege | M1 | `compose.yaml`, Dockerfiles | compose config |
 | R15.4 | PowerShell + POSIX setup commands | M1 | README | command rehearsal |
 | R15.5 | Production TLS, backups, runbooks | M5 | — | — |
@@ -169,17 +169,17 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| A1 | Simulated round chat → scores, no Google key | M1 durable; M4 strip | `demo.py` + integration tests | domain passed; demo/PG **blocked** |
+| A1 | Simulated round chat → scores, no Google key | M1 durable; M4 strip | `demo.py` + integration tests | `uv run python -m color_rush.demo` passed; `test_complete_simulated_round` passed |
 | A2 | Domain purity; clients cannot mutate off-API | M1 purity; M2/M3/M4 | lance test | `test_domain_purity` |
-| A3 | History/delay/duplicate/change/sequence rules | M1 | ingest + picks | domain + PG tests |
-| A4 | Deadline, lease, start races | M1 | coordinator | PG race tests |
-| A5 | Settlement replay / Redis loss | M1 SQL; M2 Redis | settlement | retry tests |
-| A6 | Period/DST/clock tests | M1 | periods | clock tests |
-| A7 | SQL/Redis ties; archives once | M1 SQL; M2 Redis | ranking + finalizer | finalize tests |
-| A8 | Pause/cancel/auto/bonus/unhealthy source | M1 controls; M2 source | coordinator | control tests |
+| A3 | History/delay/duplicate/change/sequence rules | M1 | ingest + picks | domain + PG ingest tests passed |
+| A4 | Deadline, lease, start races | M1 | coordinator | `test_deadline_closure_race`, fence, two-start passed |
+| A5 | Settlement replay / Redis loss | M1 SQL; M2 Redis | settlement + sweeper | PG retry + `test_sql_scores_survive_without_redis` passed |
+| A6 | Period/DST/clock tests | M1 | periods | midnight, Monday, season PG tests passed |
+| A7 | SQL/Redis ties; archives once | M1 SQL; M2 Redis | ranking + Redis ZADD | PG zero-point ties + `test_zero_score_tie_order_matches_sql_policy` passed |
+| A8 | Pause/cancel/auto/bonus/unhealthy source | M1 controls; M2 source | coordinator + source_health | pause/cancel/bonus PG tests + `test_source_lag_pauses_new_rounds` passed |
 | A9 | Console responsiveness | M3 | — | — |
 | A10–A11 | Overlay landing / safety | M4 | — | — |
-| A12 | Token/retention tests | M2 | — | — |
+| A12 | Token/retention tests | M2 | JWT expiry, overlay tickets, 7-day command purge | `test_password_and_jwt_roundtrip`; live YouTube token revoke **blocked** |
 | A13 | Capacity evidence | M5 | — | — |
 | A14 | CI + packaging consistency | M5 (M1 local gates) | ruff/mypy/pytest | local commands |
 | A15 | Final progress report | M5 (M1 updates this file) | `docs/PROGRESS.md` | review |

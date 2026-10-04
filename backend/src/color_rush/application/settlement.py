@@ -191,6 +191,7 @@ def _apply_new_ledger_effects(
                 score.gold_wins += 1
         if streak.best > score.best_streak:
             score.best_streak = streak.best
+        score.score_version += 1
 
 
 def all_partitions_complete(session: Session, round_id: UUID) -> bool:

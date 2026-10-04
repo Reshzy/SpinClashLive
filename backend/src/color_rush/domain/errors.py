@@ -36,3 +36,19 @@ class SettlementError(DomainError):
 
 class ConfigurationError(DomainError):
     pass
+
+
+class ConflictError(DomainError):
+    pass
+
+
+class AuthError(DomainError):
+    pass
+
+
+class ForbiddenError(DomainError):
+    pass
+
+
+class NotFoundError(DomainError):
+    pass

@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from redis import Redis
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -7,6 +8,9 @@ from color_rush.application.coordinator import Coordinator
 from color_rush.application.ports import Clock, Rng, SecureRng, SystemClock
 from color_rush.config import Settings, get_settings
 from color_rush.infrastructure.persistence.db import create_db_engine, create_session_factory
+from color_rush.infrastructure.redis.projections import connect_redis
+
+_runtime: "AppContainer | None" = None
 
 
 @dataclass(slots=True)
@@ -17,6 +21,7 @@ class AppContainer:
     clock: Clock
     rng: Rng
     worker_id: str
+    redis: Redis | None
 
     def coordinator(self, session: Session) -> Coordinator:
         return Coordinator(
@@ -34,9 +39,18 @@ def build_container(
     *,
     clock: Clock | None = None,
     rng: Rng | None = None,
+    redis: Redis | None | object = ...,
 ) -> AppContainer:
     resolved = settings or get_settings()
     engine = create_db_engine(resolved.database_url)
+    redis_client: Redis | None
+    if redis is ...:
+        try:
+            redis_client = connect_redis(resolved.redis_url)
+        except Exception:
+            redis_client = None
+    else:
+        redis_client = redis  # type: ignore[assignment]
     return AppContainer(
         settings=resolved,
         engine=engine,
@@ -44,4 +58,17 @@ def build_container(
         clock=clock or SystemClock(),
         rng=rng or SecureRng(),
         worker_id=resolved.color_rush_worker_id,
+        redis=redis_client,
     )
+
+
+def get_runtime_container() -> AppContainer:
+    global _runtime
+    if _runtime is None:
+        _runtime = build_container()
+    return _runtime
+
+
+def set_runtime_container(container: AppContainer | None) -> None:
+    global _runtime
+    _runtime = container

@@ -6,10 +6,18 @@ readme = "README.md"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "alembic>=1.14.0",
+    "cryptography>=44.0.0",
     "fastapi>=0.115.0",
+    "grpcio>=1.68.0",
+    "grpcio-tools>=1.68.0",
+    "httpx>=0.28.0",
+    "prometheus-client>=0.21.0",
+    "protobuf>=5.29.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.6.0",
     "psycopg[binary]>=3.2.0",
+    "pyjwt>=2.10.0",
+    "redis>=5.2.0",
     "sqlalchemy>=2.0.36",
     "structlog>=24.4.0",
     "uvicorn[standard]>=0.32.0",
@@ -28,6 +36,7 @@ dev = [
 color-rush-demo = "color_rush.demo:main"
 color-rush-worker = "color_rush.workers.__main__:main"
 color-rush-api = "color_rush.api.app:run"
+color-rush-bootstrap = "color_rush.bootstrap:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -55,6 +64,7 @@ select = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.ruff.lint.per-file-ignores]
 "backend/migrations/*" = ["E501"]
+"backend/src/color_rush/infrastructure/youtube/generated/*" = ["E", "F", "I", "UP", "B", "SIM"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -65,8 +75,22 @@ exclude = ["backend/migrations", "backend/tests"]
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["alembic.*"]
+module = [
+    "alembic.*",
+    "redis",
+    "redis.*",
+    "jwt",
+    "grpc",
+    "grpc.*",
+    "prometheus_client",
+    "google.*",
+    "color_rush.infrastructure.youtube.generated.*",
+]
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["color_rush.infrastructure.youtube.generated.*"]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
@@ -76,6 +100,7 @@ pythonpath = ["backend/src"]
 markers = [
     "domain: pure domain tests (no database)",
     "integration: PostgreSQL integration tests",
+    "redis: Redis integration tests",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

@@ -1,0 +1,81 @@
+// Vendored from YouTube Live Streaming API streaming-live-chat guide.
+// Source: https://developers.google.com/youtube/v3/live/streaming-live-chat
+// Checked: 2026-10-04. Guide last updated 2026-09-14 UTC.
+// Trimmed to StreamList + text-message fields needed by Color Rush Live.
+
+syntax = "proto2";
+
+package youtube.api.v3;
+
+service V3DataLiveChatMessageService {
+  rpc StreamList(LiveChatMessageListRequest)
+      returns (stream LiveChatMessageListResponse) {}
+}
+
+message LiveChatMessageListRequest {
+  optional string live_chat_id = 1;
+  optional string hl = 2;
+  optional uint32 profile_image_size = 3;
+  optional uint32 max_results = 98;
+  optional string page_token = 99;
+  repeated string part = 100;
+}
+
+message LiveChatMessageListResponse {
+  optional string kind = 200;
+  optional string etag = 201;
+  optional string offline_at = 2;
+  optional PageInfo page_info = 1004;
+  optional string next_page_token = 100602;
+  repeated LiveChatMessage items = 1007;
+  optional LiveChatMessage active_poll_item = 1008;
+}
+
+message LiveChatMessage {
+  optional string kind = 200;
+  optional string etag = 201;
+  optional string id = 101;
+  optional LiveChatMessageSnippet snippet = 2;
+  optional LiveChatMessageAuthorDetails author_details = 3;
+}
+
+message LiveChatMessageAuthorDetails {
+  optional string channel_id = 10101;
+  optional string channel_url = 102;
+  optional string display_name = 103;
+  optional string profile_image_url = 104;
+  optional bool is_verified = 4;
+  optional bool is_chat_owner = 5;
+  optional bool is_chat_sponsor = 6;
+  optional bool is_chat_moderator = 7;
+}
+
+message LiveChatMessageSnippet {
+  message TypeWrapper {
+    enum Type {
+      INVALID_TYPE = 0;
+      TEXT_MESSAGE_EVENT = 1;
+      TOMBSTONE = 2;
+      FAN_FUNDING_EVENT = 3;
+      CHAT_ENDED_EVENT = 4;
+      SUPER_CHAT_EVENT = 15;
+      POLL_EVENT = 20;
+    }
+  }
+  optional TypeWrapper.Type type = 1;
+  optional string live_chat_id = 201;
+  optional string author_channel_id = 301;
+  optional string published_at = 4;
+  optional bool has_display_content = 17;
+  optional string display_message = 16;
+  optional LiveChatTextMessageDetails text_message_details = 19;
+}
+
+message LiveChatTextMessageDetails {
+  optional string message_text = 1;
+}
+
+message PageInfo {
+  optional int32 total_results = 1;
+  optional int32 results_per_page = 2;
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 from sqlalchemy import select
 
@@ -47,6 +48,7 @@ def main() -> None:
             rng=rng,
             owner_id="demo-worker",
             partition_count=4,
+            lease_ttl_seconds=86_400,
         )
         game = coordinator.create_game()
         game_session = coordinator.create_session(game.id, mode=SessionMode.MANUAL)
@@ -57,17 +59,16 @@ def main() -> None:
         print(f"Predictions open  round={rnd.number} id={rnd.id}")
 
         commands = [
-            _command("yt-alice", "Alice", "!red", opened + timedelta(seconds=1), "m1"),
-            _command("yt-bob", "Bob", "!green", opened + timedelta(seconds=2), "m2"),
-            _command("yt-cara", "Cara", "!gold", opened + timedelta(seconds=3), "m3"),
-            _command("yt-drew", "Drew", "!red", opened + timedelta(seconds=4), "m4"),
-            _command("yt-cara", "Cara", "!red", opened + timedelta(seconds=6), "m5"),
-            _command("yt-cara", "Cara", "!gold", opened + timedelta(seconds=7), "m6"),
+            _command("yt-alice", "Alice", "!red", opened + timedelta(seconds=1), f"m1-{uuid4()}"),
+            _command("yt-bob", "Bob", "!green", opened + timedelta(seconds=2), f"m2-{uuid4()}"),
+            _command("yt-cara", "Cara", "!gold", opened + timedelta(seconds=3), f"m3-{uuid4()}"),
+            _command("yt-drew", "Drew", "!red", opened + timedelta(seconds=4), f"m4-{uuid4()}"),
+            _command("yt-cara", "Cara", "!red", opened + timedelta(seconds=6), f"m5-{uuid4()}"),
+            _command("yt-cara", "Cara", "!gold", opened + timedelta(seconds=7), f"m6-{uuid4()}"),
         ]
         ingested = append_and_process(session, session_id=game_session.id, commands=commands, checkpoint=None)
         print("ingest", [item.value for item in ingested.decisions])
 
-        clock.set(opened + timedelta(seconds=10))
         rnd = coordinator.close_ingress(game_session.id, token, early=True)
         rnd = coordinator.complete_drain(game_session.id, token)
         print(f"Picks locked  cutoff={rnd.cutoff_sequence}")

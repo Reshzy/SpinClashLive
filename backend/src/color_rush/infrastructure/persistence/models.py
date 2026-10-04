@@ -8,6 +8,7 @@ from sqlalchemy import (
     BigInteger,
     Boolean,
     CheckConstraint,
+    Computed,
     DateTime,
     ForeignKey,
     Index,
@@ -15,15 +16,22 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, TSTZRANGE, ExcludeConstraint
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
 class Base(DeclarativeBase):
     pass
+
+
+@event.listens_for(Base.metadata, "before_create")
+def _create_required_extensions(metadata: object, connection: Connection, **_kwargs: object) -> None:
+    connection.execute(text("CREATE EXTENSION IF NOT EXISTS btree_gist"))
 
 
 class Game(Base):
@@ -51,6 +59,7 @@ class GameSession(Base):
     next_round_bonus: Mapped[str] = mapped_column(String(32), nullable=False, default="none")
     next_round_gold_bonus_reward: Mapped[int] = mapped_column(Integer, nullable=False, default=28)
     source_mode: Mapped[str] = mapped_column(String(32), nullable=False, default="simulation")
+    last_help_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
@@ -76,6 +85,10 @@ class SourceCheckpoint(Base):
     source_mode: Mapped[str] = mapped_column(String(32), nullable=False)
     last_success_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ownership_token: Mapped[str] = mapped_column(String(128), nullable=False)
+    session_id: Mapped[UUID | None] = mapped_column(ForeignKey("game_sessions.id"))
+    resync_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    error_class: Mapped[str | None] = mapped_column(String(32))
+    lag_ms: Mapped[int | None] = mapped_column(Integer)
 
 
 class Player(Base):
@@ -90,6 +103,9 @@ class Player(Base):
     profile_refreshed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_lookup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    anonymized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class PlayerModeration(Base):
@@ -230,6 +246,12 @@ class Season(Base):
     __table_args__ = (
         Index("ix_seasons_game_status", "game_id", "status"),
         CheckConstraint("ends_at > starts_at", name="ck_seasons_interval"),
+        ExcludeConstraint(
+            ("game_id", "="),
+            ("during", "&&"),
+            using="gist",
+            name="ex_seasons_no_overlap",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
@@ -238,6 +260,11 @@ class Season(Base):
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False)
+    during: Mapped[Any] = mapped_column(
+        TSTZRANGE,
+        Computed("tstzrange(starts_at, ends_at, '[)')", persisted=True),
+        nullable=False,
+    )
 
 
 class LeaderboardPeriod(Base):
@@ -290,6 +317,7 @@ class LeaderboardScore(Base):
     rounds_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     gold_wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     best_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    score_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class LeaderboardArchive(Base):
@@ -354,7 +382,11 @@ class OutboxEvent(Base):
     __tablename__ = "outbox_events"
     __table_args__ = (
         UniqueConstraint("event_id", name="uq_outbox_event_id"),
-        Index("ix_outbox_pending", "published_at"),
+        Index(
+            "ix_outbox_pending",
+            "published_at",
+            postgresql_where=text("published_at IS NULL"),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
@@ -416,3 +448,43 @@ class ConfigurationVersion(Base):
     activation_boundary: Mapped[str] = mapped_column(String(32), nullable=False, default="next_round")
     actor_id: Mapped[UUID | None] = mapped_column(PGUUID(as_uuid=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class OverlayTicket(Base):
+    __tablename__ = "overlay_tickets"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    game_id: Mapped[UUID] = mapped_column(ForeignKey("games.id"), nullable=False)
+    session_id: Mapped[UUID | None] = mapped_column(ForeignKey("game_sessions.id"))
+    secret_hash: Mapped[str] = mapped_column(String(256), nullable=False)
+    label: Mapped[str] = mapped_column(String(80), nullable=False, default="overlay")
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class GoogleCredential(Base):
+    __tablename__ = "google_credentials"
+
+    id: Mapped[UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True)
+    game_id: Mapped[UUID] = mapped_column(ForeignKey("games.id"), nullable=False)
+    auth_mode: Mapped[str] = mapped_column(String(16), nullable=False)
+    encrypted_payload: Mapped[str] = mapped_column(Text, nullable=False)
+    scopes: Mapped[str] = mapped_column(
+        String(256), nullable=False, default="https://www.googleapis.com/auth/youtube.readonly"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class IdempotencyKey(Base):
+    __tablename__ = "idempotency_keys"
+    __table_args__ = (Index("ix_idempotency_expires", "expires_at"),)
+
+    key: Mapped[str] = mapped_column(String(128), primary_key=True)
+    actor_id: Mapped[UUID] = mapped_column(ForeignKey("admin_users.id"), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    status_code: Mapped[int] = mapped_column(Integer, nullable=False)
+    response_json: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

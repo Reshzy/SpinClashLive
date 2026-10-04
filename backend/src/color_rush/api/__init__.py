@@ -1,1 +1,1 @@
-"""HTTP composition. Milestone 1 exposes health and simulation-only helpers."""
+"""HTTP composition: versioned operator API, overlay tickets, and simulation helpers."""

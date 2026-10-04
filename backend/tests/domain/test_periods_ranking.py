@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from color_rush.domain.periods import contains, daily_window, weekly_window
+from color_rush.domain.periods import all_time_window, contains, daily_window, month_window, weekly_window
 from color_rush.domain.ranking import RankKey, ordinal_ranks
 
 MANILA = ZoneInfo("Asia/Manila")
@@ -38,3 +38,18 @@ def test_tie_order_points_then_uuid() -> None:
     assert [item.player_id for _, item in ranked] == [low, high, high]
     assert [rank for rank, _ in ranked] == [1, 2, 3]
     assert ranked[2][1].points == 0
+
+
+@pytest.mark.domain
+def test_season_month_boundary_and_all_time() -> None:
+    october = datetime(2026, 10, 31, 23, 59, 59, tzinfo=MANILA)
+    november = datetime(2026, 11, 1, 0, 0, tzinfo=MANILA)
+    oct_window = month_window(october, MANILA)
+    nov_window = month_window(november, MANILA)
+    assert oct_window.local_identity == "2026-10"
+    assert nov_window.local_identity == "2026-11"
+    assert contains(oct_window, october)
+    assert not contains(oct_window, november)
+    forever = all_time_window()
+    assert contains(forever, october)
+    assert contains(forever, november)

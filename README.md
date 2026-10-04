@@ -2,7 +2,7 @@
 
 YouTube livestream color-prediction game. The Python backend owns rules, rounds, picks, results, and scores. This repository root is the project root.
 
-Milestone 1 delivers the domain, PostgreSQL durability, settlement, health API, and a simulation demo. The desktop console and OBS overlay are skeletons until later milestones.
+Milestone 2 delivers the durable backend: YouTube/simulation ingest, authenticated `/api/v1` + WebSockets, Redis projections, and 4 Hz snapshots. The desktop console and OBS overlay remain skeletons until later milestones.
 
 ## Prerequisites
 
@@ -19,7 +19,10 @@ uv sync --extra dev
 Copy-Item .env.example .env
 docker compose up -d postgres redis
 uv run alembic upgrade head
+uv run python -m color_rush.bootstrap
 ```
+
+If host port 5432 is already a different PostgreSQL, use Compose port **5433** in `DATABASE_URL` / `COLOR_RUSH_TEST_DATABASE_URL` (Compose publishes both).
 
 Run tests:
 
@@ -29,6 +32,7 @@ uv run mypy
 uv run pytest backend/tests/domain
 # requires Compose PostgreSQL
 $env:COLOR_RUSH_TEST_DATABASE_URL = "postgresql+psycopg://color_rush:color_rush@127.0.0.1:5432/color_rush_test"
+$env:COLOR_RUSH_TEST_REDIS_URL = "redis://127.0.0.1:6379/15"
 uv run pytest
 ```
 
@@ -45,6 +49,24 @@ API (no scheduler inside Uvicorn):
 
 ```powershell
 uv run python -m uvicorn color_rush.api.app:app --host 127.0.0.1 --port 8000
+```
+
+API examples (after bootstrap):
+
+```powershell
+# login
+Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/v1/auth/login -ContentType application/json -Body '{"username":"owner","password":"change-me-owner"}'
+# overlay WS (ticket from POST /api/v1/admin/overlay-tickets)
+# ws://127.0.0.1:8000/ws/v1/overlay?ticket=<secret>
+# admin WS
+# ws://127.0.0.1:8000/ws/v1/admin  then send {"token":"<access_token>"}
+```
+
+Export contracts:
+
+```powershell
+uv run python scripts/export_contracts.py
+uv run python scripts/check_contracts.py
 ```
 
 Worker (separate process):

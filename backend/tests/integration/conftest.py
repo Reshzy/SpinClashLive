@@ -3,8 +3,11 @@ from __future__ import annotations
 import os
 from collections.abc import Iterator
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
@@ -13,11 +16,30 @@ from sqlalchemy.orm import Session, sessionmaker
 from color_rush.application.coordinator import Coordinator
 from color_rush.application.ports import FrozenClock, SequenceRng
 from color_rush.domain.enums import SessionMode
-from color_rush.infrastructure.persistence.models import Base
+
+ROOT = Path(__file__).resolve().parents[3]
 
 
 def _database_url() -> str | None:
     return os.environ.get("COLOR_RUSH_TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
+
+
+def _alembic_config(url: str) -> Config:
+    cfg = Config(str(ROOT / "alembic.ini"))
+    cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+    return cfg
+
+
+def _run_upgrade(url: str) -> None:
+    previous = os.environ.get("DATABASE_URL")
+    os.environ["DATABASE_URL"] = url
+    try:
+        command.upgrade(_alembic_config(url), "head")
+    finally:
+        if previous is None:
+            os.environ.pop("DATABASE_URL", None)
+        else:
+            os.environ["DATABASE_URL"] = previous
 
 
 @pytest.fixture(scope="session")
@@ -31,10 +53,16 @@ def pg_engine() -> Iterator[Engine]:
             conn.execute(text("SELECT 1"))
     except OperationalError as exc:
         pytest.skip(f"PostgreSQL unavailable: {exc}")
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO CURRENT_USER"))
+        conn.execute(text("GRANT ALL ON SCHEMA public TO public"))
+    _run_upgrade(url)
     yield engine
-    Base.metadata.drop_all(engine)
+    with engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA public CASCADE"))
+        conn.execute(text("CREATE SCHEMA public"))
     engine.dispose()
 
 
@@ -48,7 +76,8 @@ def db_session(pg_engine: Engine) -> Iterator[Session]:
         yield session
     finally:
         session.close()
-        transaction.rollback()
+        if transaction.is_active:
+            transaction.rollback()
         connection.close()
 
 
