@@ -30,7 +30,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | --- | --- | --- | --- | --- |
 | R3.1 | Independent backend, migrations, workers | M1 | package + Alembic + worker entry | `alembic upgrade head` + `pytest` 74 passed |
 | R3.2 | Secure operator API | M2 | `api/routes.py`, JWT, roles, idempotency | `test_auth_roles_and_overlay_ticket` passed |
-| R3.3 | Simulation source + real YouTube source | M2 | `SimulationChatSource`, `YouTubeChatSource` | sim source + YouTube fixture tests passed; live YouTube **blocked** (no `GOOGLE_API_KEY`) |
+| R3.3 | Simulation source + real YouTube source | M2 | `SimulationChatSource`, `YouTubeChatSource` | sim source + YouTube fixture tests passed; live YouTube **blocked** (no live broadcast connected; local `GOOGLE_*` in `.env`) |
 | R3.4 | OBS overlay | M4 | overlay skeleton only in M1 | — |
 | R3.5 | Manual/auto, durable ingest, scoring, pause/cancel, bonuses | M1 | application services | integration tests |
 | R3.6 | Four leaderboards, ranks, archives, champions | M1 SQL; M2 Redis; M4 display | settlement + periods | period tests |

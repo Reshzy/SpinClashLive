@@ -42,7 +42,7 @@ uv run python scripts/check_contracts.py
 # contracts ok
 ```
 
-Live YouTube private-stream acceptance was **not** run. `GOOGLE_API_KEY` is unset in this environment.
+Live YouTube private-stream acceptance was **not** run. Local `.env` now has backend-owned `GOOGLE_*` values (gitignored). `.env.example` stays empty placeholders. `gcloud` is not installed here, so API-key restriction/rotation in Cloud Console is still an operator step — see `docs/YOUTUBE_SETUP.md`.
 
 ```powershell
 $env:GOOGLE_API_KEY = "<restricted-key>"
@@ -53,14 +53,14 @@ uv run python -m color_rush.bootstrap
 # confirm source health is healthy, send !red in chat, confirm an inbox row
 ```
 
-**Blocked** — credentials missing. Fixture tests in `backend/tests/application/test_youtube_contracts.py` check official JSON/gRPC shapes only; they do not prove live API access.
+**Blocked** — live broadcast not connected in this environment. Fixture tests in `backend/tests/application/test_youtube_contracts.py` check official JSON/gRPC shapes only; they do not prove live API access.
 
 ## Milestone status
 
 | Milestone | Status |
 | --- | --- |
 | 1 Foundation, rules, durable scoring | **Complete.** |
-| 2 YouTube ingest, API, realtime projections | **Complete** locally (Postgres + Redis + contracts). Live YouTube **blocked** without credentials. |
+| 2 YouTube ingest, API, realtime projections | **Complete** locally (Postgres + Redis + contracts). Live YouTube **blocked** until a live video is connected; local `GOOGLE_*` is in gitignored `.env`. |
 | 3 PySide6 operator console | Not started |
 | 4 OBS overlay | Not started |
 | 5 Reliability, scale, packaging | Not started |
@@ -103,7 +103,7 @@ See `docs/DECISIONS.md`.
 
 ## Remaining external prerequisites
 
-- Live YouTube private-stream script: **blocked** until a restricted API key / OAuth client exists
+- Live YouTube private-stream script: **blocked** until a live video with chat is connected. Local `GOOGLE_*` is in gitignored `.env`; restrict/rotate the API key in Cloud Console (`docs/YOUTUBE_SETUP.md`). `gcloud` is not installed in this environment.
 - YouTube API-use and retention review still required before production (`docs/SECURITY_AND_DATA.md`)
 
 ## Can milestone 3 begin?

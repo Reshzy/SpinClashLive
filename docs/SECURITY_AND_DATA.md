@@ -42,5 +42,7 @@ Do not reward watch time, subscriptions, paid messages, or donations. Super Chat
 - Overlay tickets are read-only and cannot call admin routes
 - Loopback bind by default; CORS/WebSocket origins are configured
 - Metrics restricted to trusted/loopback when `TRUSTED_METRICS` is disabled
+- Google YouTube secrets (`GOOGLE_API_KEY`, OAuth client id/secret) live only in gitignored `.env`; never in `.env.example`, desktop config, overlay bundles, or chat
+- An API key pasted into chat or committed to git is compromised: rotate it in Cloud Console and restrict the replacement to YouTube Data API v3 (`docs/YOUTUBE_SETUP.md`)
 - No secrets in overlay assets or TypeScript bundles
 - Structured logs must not include tokens, full chat bodies, or profile secrets
