@@ -1,0 +1,83 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: color_rush
+      POSTGRES_PASSWORD: color_rush
+      POSTGRES_DB: color_rush
+    ports:
+      - "5432:5432"
+    volumes:
+      - color_rush_pg:/var/lib/postgresql/data
+      - ./deployment/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U color_rush -d color_rush"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - color_rush_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: deployment/api.Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://color_rush:color_rush@postgres:5432/color_rush_sim
+      REDIS_URL: redis://redis:6379/0
+      COLOR_RUSH_HOST: 0.0.0.0
+      COLOR_RUSH_ENV: simulation
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/live')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: deployment/worker.Dockerfile
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DATABASE_URL: postgresql+psycopg://color_rush:color_rush@postgres:5432/color_rush_sim
+      REDIS_URL: redis://redis:6379/0
+      COLOR_RUSH_ENV: simulation
+      COLOR_RUSH_WORKER_ROLE: all
+      COLOR_RUSH_WORKER_ID: compose-worker-1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    # Explicit worker entry. The API process does not start this scheduler.
+
+volumes:
+  color_rush_pg:
+  color_rush_redis:

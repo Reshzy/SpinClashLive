@@ -1,0 +1,82 @@
+[project]
+name = "color-rush-live"
+version = "0.1.0"
+description = "Color Rush Live — YouTube livestream color prediction game backend"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "alembic>=1.14.0",
+    "fastapi>=0.115.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.6.0",
+    "psycopg[binary]>=3.2.0",
+    "sqlalchemy>=2.0.36",
+    "structlog>=24.4.0",
+    "uvicorn[standard]>=0.32.0",
+    "tzdata>=2024.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.13.0",
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.8.0",
+]
+
+[project.scripts]
+color-rush-demo = "color_rush.demo:main"
+color-rush-worker = "color_rush.workers.__main__:main"
+color-rush-api = "color_rush.api.app:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/src/color_rush"]
+
+[tool.hatch.build.targets.wheel.sources]
+"backend/src" = ""
+
+[tool.uv]
+package = true
+
+[tool.hatch.build]
+dev-mode-dirs = ["backend/src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+src = ["backend/src", "backend/tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.per-file-ignores]
+"backend/migrations/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+mypy_path = "backend/src"
+packages = ["color_rush"]
+exclude = ["backend/migrations", "backend/tests"]
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["alembic.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["backend/tests"]
+pythonpath = ["backend/src"]
+markers = [
+    "domain: pure domain tests (no database)",
+    "integration: PostgreSQL integration tests",
+]
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
