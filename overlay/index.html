@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Color Rush Live</title>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="sim-banner" hidden>SIMULATION</div>
+      <header class="top">
+        <div class="brand-block">
+          <p class="kicker">YouTube Live</p>
+          <h1 class="brand">Color Rush Live</h1>
+        </div>
+        <p id="round-label">Round —</p>
+        <p id="connection" class="pill">Awaiting connection</p>
+        <p id="status">Waiting for round</p>
+        <p id="countdown">0:30</p>
+      </header>
+      <p id="bonus-banner" hidden></p>
+      <section id="strip-section" aria-label="Result strip">
+        <div id="strip-window">
+          <div id="strip"></div>
+          <div id="marker" aria-hidden="true"></div>
+        </div>
+        <p id="odds">Red 47.5% · Green 47.5% · Gold 5%</p>
+      </section>
+      <section id="history" aria-label="Recent results"></section>
+      <main class="body">
+        <section id="columns" aria-label="Picks">
+          <article class="column" data-color="red">
+            <h2>Red</h2>
+            <p class="command">!red</p>
+            <p class="reward" data-reward="red">+2</p>
+            <p class="count" data-count="red">0</p>
+            <ul class="names" data-names="red"></ul>
+          </article>
+          <article class="column" data-color="gold">
+            <h2>Gold</h2>
+            <p class="command">!gold</p>
+            <p class="reward" data-reward="gold">+14</p>
+            <p class="count" data-count="gold">0</p>
+            <ul class="names" data-names="gold"></ul>
+          </article>
+          <article class="column" data-color="green">
+            <h2>Green</h2>
+            <p class="command">!green</p>
+            <p class="reward" data-reward="green">+2</p>
+            <p class="count" data-count="green">0</p>
+            <ul class="names" data-names="green"></ul>
+          </article>
+        </section>
+        <aside class="rail">
+          <section id="board">
+            <h2 id="board-title">Weekly</h2>
+            <p id="board-status"></p>
+            <ol id="board-list"></ol>
+          </section>
+          <section id="spotlight">
+            <div id="lookup" hidden></div>
+            <div id="ceremony" hidden></div>
+          </section>
+        </aside>
+      </main>
+      <p id="empty-picks" hidden>No picks yet</p>
+      <p id="award-status" hidden></p>
+      <footer id="help">Type !red / !gold / !green in chat</footer>
+      <div id="particles" aria-hidden="true"></div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

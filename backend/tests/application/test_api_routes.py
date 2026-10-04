@@ -7,6 +7,7 @@ def test_health_and_versioned_routes_registered() -> None:
     assert "/health/live" in paths
     assert "/health/ready" in paths
     assert "/overlay" in paths
+    assert "/api/v1/overlay/ws-ticket" in paths
     assert "/api/v1/auth/login" in paths
     assert "/api/v1/auth/refresh" in paths
     assert "/api/v1/admin/rounds/start" in paths

@@ -256,6 +256,15 @@ def test_auth_roles_and_overlay_ticket(
     )
     assert created.status_code == 200
     assert "secret" in created.json()
+    overlay_secret = created.json()["secret"]
+    exchanged = client.post("/api/v1/overlay/ws-ticket", json={"secret": overlay_secret})
+    assert exchanged.status_code == 200
+    ws_ticket = exchanged.json()["ticket"]
+    assert exchanged.json()["ws_path"] == "/ws/v1/overlay"
+    denied_secret = client.get("/api/v1/admin/health", headers={"Authorization": f"Bearer {overlay_secret}"})
+    assert denied_secret.status_code == 401
+    denied_ws = client.get("/api/v1/admin/health", headers={"Authorization": f"Bearer {ws_ticket}"})
+    assert denied_ws.status_code == 401
     replay = client.post(
         "/api/v1/admin/overlay-tickets",
         headers={**headers, "Idempotency-Key": "ticket-create-1"},

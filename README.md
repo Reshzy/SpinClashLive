@@ -2,7 +2,15 @@
 
 YouTube livestream color-prediction game. The Python backend owns rules, rounds, picks, results, and scores. This repository root is the project root.
 
-Milestone 3 delivers the native PySide6 operator console against `/api/v1`. The OBS overlay remains a milestone 4 surface; `/overlay` currently serves a placeholder page.
+Milestone 4 delivers the OBS browser overlay at `/overlay` (Vite + TypeScript + GSAP). Build it before serving:
+
+```powershell
+cd overlay
+npm ci
+npm run build
+```
+
+See `docs/OBS_SETUP.md`. The overlay URL is `http://127.0.0.1:8000/overlay#<secret>` from Overlay Setup.
 
 ## Prerequisites
 
@@ -57,8 +65,8 @@ API examples (after bootstrap):
 ```powershell
 # login
 Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/v1/auth/login -ContentType application/json -Body '{"username":"owner","password":"change-me-owner"}'
-# overlay WS (ticket from POST /api/v1/admin/overlay-tickets)
-# ws://127.0.0.1:8000/ws/v1/overlay?ticket=<secret>
+# overlay WS (ticket from POST /api/v1/overlay/ws-ticket after fragment exchange)
+# ws://127.0.0.1:8000/ws/v1/overlay  then send {"ticket":"<short-lived>"}
 # admin WS
 # ws://127.0.0.1:8000/ws/v1/admin  then send {"token":"<access_token>"}
 ```

@@ -31,9 +31,9 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R3.1 | Independent backend, migrations, workers | M1 | package + Alembic + worker entry | `alembic upgrade head` + `pytest` 74 passed |
 | R3.2 | Secure operator API | M2 | `api/routes.py`, JWT, roles, idempotency | `test_auth_roles_and_overlay_ticket` passed |
 | R3.3 | Simulation source + real YouTube source | M2 | `SimulationChatSource`, `YouTubeChatSource` | sim source + YouTube fixture tests passed; live YouTube **blocked** (no live broadcast connected; local `GOOGLE_*` in `.env`) |
-| R3.4 | OBS overlay | M4 | overlay skeleton only in M1 | — |
+| R3.4 | OBS overlay | M4 | `overlay/` Vite app served at `/overlay` | Vitest 10 passed; Playwright 6 passed; live `/overlay` + overlay WS **passed** |
 | R3.5 | Manual/auto, durable ingest, scoring, pause/cancel, bonuses | M1 | application services | integration tests |
-| R3.6 | Four leaderboards, ranks, archives, champions | M1 SQL; M2 Redis; M4 display | settlement + periods | period tests |
+| R3.6 | Four leaderboards, ranks, archives, champions | M1 SQL; M2 Redis; M4 display | settlement + rotating snapshot board | period tests; overlay board rotation |
 | R3.7 | Operator console pages | M3 | `desktop/src/color_rush_desktop` nine pages + login | `pytest desktop/tests` 9 passed |
 | R3.8 | Prestige badges from finalized periods | M2/M4 | champion records in M1 | archive tests |
 | R3.9 | Backpressure, metrics, load, packaging, ops docs | M5 (M1 health only) | `/health/*` | health tests |
@@ -48,9 +48,9 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R4.3 | FastAPI / Pydantic | M1 health+sim; M2 full API | `color_rush.api` | OpenAPI export + route tests passed |
 | R4.4 | PostgreSQL, SQLAlchemy 2, Alembic | M1 | models + migrations | `alembic upgrade head` to `0002_m2_auth_source` on `color_rush_sim` / fresh `color_rush_test` |
 | R4.5 | Redis projections/streams | M2 | `infrastructure/redis` | `test_stale_projection_cannot_overwrite`, `test_zero_score_tie_order_matches_sql_policy`, `test_outbox_pending_recovery_dead_letters` passed |
-| R4.6 | Vite/TS/GSAP overlay | M4 | overlay skeleton in M1 | — |
+| R4.6 | Vite/TS/GSAP overlay | M4 | `overlay/` + GSAP npm, no CDN | `npm run test` 10 passed; `npm run build` |
 | R4.7 | Docker Compose backend | M1 | `compose.yaml`, Dockerfiles | `docker compose up -d postgres redis` healthy |
-| R4.8 | pytest, Qt tests, Vitest, Playwright, Locust | M1 pytest; later others | `backend/tests` | `uv run pytest` **74 passed** |
+| R4.8 | pytest, Qt tests, Vitest, Playwright, Locust | M1–M4 pytest/Qt/Vitest/Playwright; Locust M5 | overlay Vitest+Playwright | Playwright **6 passed** (1080/720 screenshots) |
 | R4.9 | Ruff + typecheck | M1 | Ruff/mypy config | `ruff` / `mypy` |
 | R4.10 | No SQLite for concurrency tests | M1 | PG-only integration | `test_deadline_closure_race` passed |
 
@@ -119,7 +119,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R10.4 | Top 100 archive + unique champion; empty = no champion | M1 | period finalizer | archive tests |
 | R10.5 | Tie policy displayed in help | M2 help card; M1 domain order | `ranking.py` | ranking tests |
 | R10.6 | Redis key layout and tie encoding | M2 | `encoded_score` / generation keys | `test_tie_encoding_and_safe_names`, `test_zero_score_tie_order_matches_sql_policy` passed |
-| R10.7 | Overlay rotation / lookup queue / help cooldown | M2/M4 | snapshots + `THROTTLED_LOOKUP` / `HELP_COOLDOWN` | `test_lookup_and_help_cooldown` passed |
+| R10.7 | Overlay rotation / lookup queue / help cooldown | M2/M4 | rotating snapshot board; lookup/help throttle | `test_lookup_and_help_cooldown`; overlay board Playwright |
 
 ## Master §11 YouTube and simulation
 
@@ -146,7 +146,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R13.3 | Real authenticated actions, no optimistic round state | M3 | Dashboard/YouTube/… pages | `test_failed_action_keeps_round_state` passed |
 | R13.4 | Login/refresh/keyring; Google via system browser | M3 | login + YouTube page + backend OAuth routes | OAuth unit tests passed; live Google **blocked** |
 | R13.5 | Players/leaderboards pagination, ranks, champions | M3 | players/leaderboards pages + cursor APIs | Qt + route registration tests |
-| R13.6 | Overlay tickets, OBS URL, 1080/720 instructions | M3 | overlay_setup page; `/overlay` stub | grab screenshot test; M4 replaces overlay UI |
+| R13.6 | Overlay tickets, OBS URL, 1080/720 instructions | M3/M4 | overlay_setup page; `docs/OBS_SETUP.md` | ticket exchange live; Playwright 1080/720 |
 | R13.7 | Roles hide and server-enforce | M3 | `roles.py` + backend WRITE_ROLES | `test_moderator_cannot_save_settings` passed |
 | R13.8 | Close console does not stop backend | M3 | no process kill; documented | `test_operator_smoke_against_running_api` + `test_shutdown_cancels_worker` |
 | A9 | Console stays responsive | M3 | QThread worker | `test_slow_network_keeps_ui_clickable` passed |
@@ -155,7 +155,13 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| R14.* | Overlay composition and animation | M4 | overlay skeleton in M1 | — |
+| R14.1 | 1920×1080 / 1280×720 composition | M4 | `overlay/src` stage scale | Playwright 1080/720 screenshots |
+| R14.2 | Strip + center marker, three columns, board, help | M4 | original Color Rush Live UI | `overlay/tests/e2e/screenshots/` |
+| R14.3 | Authoritative snapshot client | M4 | `transport/` + `state/reducer.ts` | Vitest seq reject; live overlay WS |
+| R14.4 | GSAP strip from `animation_plan` | M4 | 40-tile layout + `animation/strip.ts` | landing error < 8px; domain slot tests |
+| R14.5 | Award pending vs committed | M4 | snapshot `award_status` | Playwright gold RESULT: Updating scores |
+| R14.6 | Safe names; no wagering UI; audio off | M4 | `textContent` + sanitize | unsafe-name Playwright |
+| R14.7 | Overlay-only credentials | M4 | fragment → short-lived WS JWT | overlay secret → admin 401 |
 
 ## Master §15 Security and operations
 
@@ -186,7 +192,8 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | A7 | SQL/Redis ties; archives once | M1 SQL; M2 Redis | ranking + Redis ZADD | PG zero-point ties + `test_zero_score_tie_order_matches_sql_policy` passed |
 | A8 | Pause/cancel/auto/bonus/unhealthy source | M1 controls; M2 source | coordinator + source_health | pause/cancel/bonus PG tests + `test_source_lag_pauses_new_rounds` passed |
 | A9 | Console responsiveness | M3 | QThread + Dashboard | `test_slow_network_keeps_ui_clickable` passed |
-| A10–A11 | Overlay landing / safety | M4 | — | — |
+| A10 | Overlay lands on every color; reload phases | M4 | GSAP + snapshot reconstruct | Playwright spinning/gold/reload; OBS **blocked** |
+| A11 | Safe overlay text; 1080/720 screenshots | M4 | sanitize + Playwright | screenshots captured; no wagering UI |
 | A12 | Token/retention tests | M2 | JWT expiry, overlay tickets, 7-day command purge | `test_password_and_jwt_roundtrip`; live YouTube token revoke **blocked** |
 | A13 | Capacity evidence | M5 | — | — |
 | A14 | CI + packaging consistency | M5 (M1 local gates) | ruff/mypy/pytest | local commands |

@@ -227,9 +227,55 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Game Snapshot Api V1 Game Snapshot Get"
+                  "$ref": "#/components/schemas/SnapshotEnvelopePayload"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/overlay/ws-ticket": {
+      "post": {
+        "tags": [
+          "game"
+        ],
+        "summary": "Overlay Ws Ticket",
+        "operationId": "overlay_ws_ticket_api_v1_overlay_ws_ticket_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/OverlayWsTicketRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OverlayWsTicketResponse"
                 }
               }
             }
@@ -2721,16 +2767,69 @@
         }
       }
     },
-    "/overlay": {
+    "/overlay/": {
       "get": {
-        "summary": "Overlay Placeholder",
-        "operationId": "overlay_placeholder_overlay_get",
+        "summary": "Overlay Page",
+        "operationId": "overlay_page_overlay__get",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/overlay": {
+      "get": {
+        "summary": "Overlay Page",
+        "operationId": "overlay_page_overlay_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/overlay/{asset_path}": {
+      "get": {
+        "summary": "Overlay Public Asset",
+        "operationId": "overlay_public_asset_overlay__asset_path__get",
+        "parameters": [
+          {
+            "name": "asset_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Asset Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }
@@ -2873,6 +2972,87 @@
         },
         "type": "object",
         "title": "HTTPValidationError"
+      },
+      "LeaderboardEntryPayload": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "player_id": {
+            "type": "string",
+            "title": "Player Id"
+          },
+          "display_name": {
+            "type": "string",
+            "title": "Display Name"
+          },
+          "points": {
+            "type": "integer",
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "player_id",
+          "display_name",
+          "points"
+        ],
+        "title": "LeaderboardEntryPayload"
+      },
+      "LeaderboardPayload": {
+        "properties": {
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          },
+          "period_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Id"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/LeaderboardEntryPayload"
+            },
+            "type": "array",
+            "title": "Entries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "scope"
+        ],
+        "title": "LeaderboardPayload"
       },
       "LoginRequest": {
         "properties": {
@@ -3017,6 +3197,95 @@
           "obs_url"
         ],
         "title": "OverlayTicketCreated"
+      },
+      "OverlayWsTicketRequest": {
+        "properties": {
+          "secret": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 512
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Secret"
+          }
+        },
+        "type": "object",
+        "title": "OverlayWsTicketRequest"
+      },
+      "OverlayWsTicketResponse": {
+        "properties": {
+          "ticket": {
+            "type": "string",
+            "title": "Ticket"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "ws_path": {
+            "type": "string",
+            "title": "Ws Path",
+            "default": "/ws/v1/overlay"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticket",
+          "expires_in"
+        ],
+        "title": "OverlayWsTicketResponse"
+      },
+      "PresentationPlanPayload": {
+        "properties": {
+          "animation_id": {
+            "type": "string",
+            "title": "Animation Id"
+          },
+          "starts_at": {
+            "type": "string",
+            "title": "Starts At"
+          },
+          "ends_at": {
+            "type": "string",
+            "title": "Ends At"
+          },
+          "duration_s": {
+            "type": "integer",
+            "title": "Duration S"
+          },
+          "layout_version": {
+            "type": "integer",
+            "title": "Layout Version"
+          },
+          "target_color": {
+            "type": "string",
+            "title": "Target Color"
+          },
+          "target_slot": {
+            "type": "integer",
+            "title": "Target Slot"
+          },
+          "target_offset": {
+            "type": "integer",
+            "title": "Target Offset",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "animation_id",
+          "starts_at",
+          "ends_at",
+          "duration_s",
+          "layout_version",
+          "target_color",
+          "target_slot"
+        ],
+        "title": "PresentationPlanPayload"
       },
       "RefreshRequest": {
         "properties": {
@@ -3290,6 +3559,283 @@
           "fence_token"
         ],
         "title": "SimStartRound"
+      },
+      "SnapshotDataPayload": {
+        "properties": {
+          "state": {
+            "type": "string",
+            "title": "State"
+          },
+          "closes_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closes At"
+          },
+          "rules": {
+            "$ref": "#/components/schemas/SnapshotRulesPayload"
+          },
+          "counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Counts"
+          },
+          "recent_players": {
+            "additionalProperties": {
+              "items": {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Recent Players"
+          },
+          "leaderboard": {
+            "$ref": "#/components/schemas/LeaderboardPayload"
+          },
+          "recent_results": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Recent Results"
+          },
+          "source_status": {
+            "type": "string",
+            "title": "Source Status"
+          },
+          "animation_plan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresentationPlanPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "lookup": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Lookup"
+          },
+          "ceremony": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ceremony"
+          },
+          "award_status": {
+            "type": "string",
+            "title": "Award Status",
+            "default": "none"
+          },
+          "projection_fresh_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Projection Fresh At"
+          },
+          "paused": {
+            "type": "boolean",
+            "title": "Paused",
+            "default": false
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
+          "source_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Mode"
+          },
+          "round_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Number"
+          },
+          "session_revision": {
+            "type": "integer",
+            "title": "Session Revision",
+            "default": 1
+          },
+          "help": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Help"
+          }
+        },
+        "additionalProperties": true,
+        "type": "object",
+        "required": [
+          "state",
+          "rules",
+          "counts",
+          "recent_players",
+          "leaderboard",
+          "recent_results",
+          "source_status"
+        ],
+        "title": "SnapshotDataPayload"
+      },
+      "SnapshotEnvelopePayload": {
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "title": "Schema Version"
+          },
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "round_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Round Id"
+          },
+          "snapshot_sequence": {
+            "type": "integer",
+            "title": "Snapshot Sequence"
+          },
+          "server_time": {
+            "type": "string",
+            "title": "Server Time"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SnapshotDataPayload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema_version",
+          "type",
+          "session_id",
+          "snapshot_sequence",
+          "server_time",
+          "data"
+        ],
+        "title": "SnapshotEnvelopePayload"
+      },
+      "SnapshotRulesPayload": {
+        "properties": {
+          "rewards": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Rewards"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
+          },
+          "bonus": {
+            "type": "string",
+            "title": "Bonus",
+            "default": "none"
+          },
+          "gold_bonus_reward": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gold Bonus Reward"
+          },
+          "percentages": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percentages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rewards"
+        ],
+        "title": "SnapshotRulesPayload"
       },
       "TokenResponse": {
         "properties": {

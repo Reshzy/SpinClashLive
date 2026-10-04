@@ -30,10 +30,14 @@ class Settings(BaseSettings):
     drain_poll_interval_ms: int = 50
     secret_key: str = "change-me-dev-only"
     color_rush_timezone: str = "Asia/Manila"
-    cors_origins: str = "http://127.0.0.1:8000,http://localhost:8000"
+    cors_origins: str = (
+        "http://127.0.0.1:8000,http://localhost:8000,"
+        "http://127.0.0.1:5173,http://localhost:5173"
+    )
     jwt_access_ttl_seconds: int = 900
     jwt_refresh_ttl_seconds: int = 60 * 60 * 24 * 7
     overlay_ticket_ttl_seconds: int = 60 * 60 * 24 * 30
+    overlay_ws_ticket_ttl_seconds: int = 120
     snapshot_hz: float = 4.0
     command_retention_days: int = 7
     source_lag_pause_ms: int = 8000

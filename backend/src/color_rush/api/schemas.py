@@ -111,6 +111,84 @@ class OverlayTicketCreated(BaseModel):
     obs_url: str
 
 
+class OverlayWsTicketRequest(BaseModel):
+    secret: str | None = Field(default=None, max_length=512)
+
+
+class OverlayWsTicketResponse(BaseModel):
+    ticket: str
+    expires_in: int
+    ws_path: str = "/ws/v1/overlay"
+
+
+class PresentationPlanPayload(BaseModel):
+    animation_id: str
+    starts_at: str
+    ends_at: str
+    duration_s: int
+    layout_version: int
+    target_color: str
+    target_slot: int
+    target_offset: int = 0
+
+
+class SnapshotRulesPayload(BaseModel):
+    rewards: dict[str, int]
+    weights: dict[str, int] | None = None
+    bonus: str = "none"
+    gold_bonus_reward: int | None = None
+    percentages: dict[str, float] | None = None
+
+
+class LeaderboardEntryPayload(BaseModel):
+    rank: int
+    player_id: str
+    display_name: str
+    points: int
+
+
+class LeaderboardPayload(BaseModel):
+    scope: str
+    period_id: str | None = None
+    status: str | None = None
+    label: str | None = None
+    entries: list[LeaderboardEntryPayload] = Field(default_factory=list)
+
+
+class SnapshotDataPayload(BaseModel):
+    model_config = {"extra": "allow"}
+
+    state: str
+    closes_at: str | None = None
+    rules: SnapshotRulesPayload
+    counts: dict[str, int]
+    recent_players: dict[str, list[dict[str, str]]]
+    leaderboard: LeaderboardPayload
+    recent_results: list[str]
+    source_status: str
+    animation_plan: PresentationPlanPayload | None = None
+    lookup: list[dict[str, Any]] = Field(default_factory=list)
+    ceremony: dict[str, Any] | None = None
+    award_status: str = "none"
+    projection_fresh_at: str | None = None
+    paused: bool = False
+    mode: str | None = None
+    source_mode: str | None = None
+    round_number: int | None = None
+    session_revision: int = 1
+    help: dict[str, Any] | None = None
+
+
+class SnapshotEnvelopePayload(BaseModel):
+    schema_version: int
+    type: str
+    session_id: str
+    round_id: str | None = None
+    snapshot_sequence: int
+    server_time: str
+    data: SnapshotDataPayload
+
+
 class YoutubeOAuthStartRequest(BaseModel):
     game_id: UUID
 

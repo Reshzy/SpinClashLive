@@ -5,12 +5,14 @@ import json
 import time
 from collections import defaultdict
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
+from fastapi.staticfiles import StaticFiles
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
 from pydantic import BaseModel, Field
 from sqlalchemy import text
@@ -35,6 +37,52 @@ from color_rush.infrastructure.security import decode_access_token
 
 REQUESTS = Counter("color_rush_http_requests_total", "HTTP requests", ["path", "method"])
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
+
+OVERLAY_PLACEHOLDER = """<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Color Rush Live overlay</title>
+<style>
+body {
+  margin: 0;
+  background: #16181d;
+  color: #f4f6fb;
+  font: 20px/1.4 Segoe UI, sans-serif;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+}
+main { text-align: center; max-width: 720px; padding: 32px; }
+.kicker {
+  color: #ff8a3d;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: 14px;
+}
+</style>
+</head>
+<body>
+<main>
+<p class="kicker">OBS Browser Source</p>
+<h1>Color Rush Live</h1>
+<p>Build the overlay with <code>npm run build</code> in <code>overlay/</code>, then reload this URL.</p>
+<p>Recommended sizes: 1920x1080 and 1280x720.</p>
+</main>
+</body>
+</html>
+"""
+
+
+def overlay_dist_dir() -> Path | None:
+    here = Path(__file__).resolve()
+    candidates: list[Path] = [Path.cwd() / "overlay" / "dist", Path("/app/overlay/dist")]
+    if len(here.parents) >= 4:
+        candidates.insert(0, here.parents[4] / "overlay" / "dist")
+    for path in candidates:
+        if (path / "index.html").is_file():
+            return path
+    return None
 
 
 class SimCommand(BaseModel):
@@ -101,45 +149,33 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
     if settings.is_simulation:
         _mount_simulation(app)
 
-    @app.get("/overlay")
-    def overlay_placeholder() -> HTMLResponse:
-        return HTMLResponse(
-            """<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<title>Color Rush Live overlay</title>
-<style>
-body {
-  margin: 0;
-  background: #111;
-  color: #f4f4f4;
-  font: 20px/1.4 Segoe UI, sans-serif;
-  display: grid;
-  place-items: center;
-  min-height: 100vh;
-}
-main { text-align: center; max-width: 720px; padding: 32px; }
-.kicker {
-  color: #ff8a3d;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  font-size: 14px;
-}
-</style>
-</head>
-<body>
-<main>
-<p class="kicker">OBS Browser Source</p>
-<h1>Color Rush Live</h1>
-<p>This placeholder confirms the overlay URL and scoped ticket fragment.</p>
-<p>The production overlay ships in milestone 4.</p>
-<p>Recommended sizes: 1920x1080 and 1280x720.</p>
-</main>
-</body>
-</html>
-"""
-        )
+    @app.get("/overlay", response_model=None)
+    @app.get("/overlay/", response_model=None)
+    def overlay_page() -> HTMLResponse | FileResponse:
+        dist = overlay_dist_dir()
+        if dist is not None:
+            return FileResponse(
+                dist / "index.html",
+                media_type="text/html",
+                headers={"Cache-Control": "no-store"},
+            )
+        return HTMLResponse(OVERLAY_PLACEHOLDER)
+
+    dist = overlay_dist_dir()
+    if dist is not None:
+        assets = dist / "assets"
+        if assets.is_dir():
+            app.mount("/overlay/assets", StaticFiles(directory=str(assets)), name="overlay-assets")
+
+    @app.get("/overlay/{asset_path:path}")
+    def overlay_public_asset(asset_path: str) -> FileResponse:
+        dist_dir = overlay_dist_dir()
+        if dist_dir is None or not asset_path or asset_path.endswith("/"):
+            raise HTTPException(status_code=404)
+        target = (dist_dir / asset_path).resolve()
+        if dist_dir.resolve() not in target.parents or not target.is_file():
+            raise HTTPException(status_code=404)
+        return FileResponse(target)
 
     @app.middleware("http")
     async def _limits(request: Request, call_next):  # type: ignore[no-untyped-def]

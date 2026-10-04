@@ -40,6 +40,7 @@ Do not reward watch time, subscriptions, paid messages, or donations. Super Chat
 
 - Operator JWT access + hashed refresh sessions
 - Overlay tickets are read-only and cannot call admin routes
+- OBS URL carries the overlay secret in the **fragment**; the overlay strips it and exchanges `POST /api/v1/overlay/ws-ticket` for a short-lived WS JWT (`typ=overlay_ws`)
 - Loopback bind by default; CORS/WebSocket origins are configured
 - Metrics restricted to trusted/loopback when `TRUSTED_METRICS` is disabled
 - Google YouTube secrets (`GOOGLE_API_KEY`, OAuth client id/secret) live only in gitignored `.env`; never in `.env.example`, desktop config, overlay bundles, or chat

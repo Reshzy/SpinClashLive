@@ -75,10 +75,39 @@ def create_access_token(
 
 
 def decode_access_token(secret_key: str, token: str) -> dict[str, Any]:
+    return _decode_typed_token(secret_key, token, expected_type="access")
+
+
+def create_overlay_ws_token(
+    *,
+    secret_key: str,
+    ticket_id: UUID,
+    game_id: UUID,
+    session_id: UUID | None,
+    ttl_seconds: int,
+    now: datetime | None = None,
+) -> str:
+    issued = now or datetime.now(tz=UTC)
+    payload: dict[str, Any] = {
+        "sub": str(ticket_id),
+        "game_id": str(game_id),
+        "session_id": str(session_id) if session_id else None,
+        "typ": "overlay_ws",
+        "iat": int(issued.timestamp()),
+        "exp": int((issued + timedelta(seconds=ttl_seconds)).timestamp()),
+    }
+    return jwt_encode(payload, secret_key, algorithm="HS256")
+
+
+def decode_overlay_ws_token(secret_key: str, token: str) -> dict[str, Any]:
+    return _decode_typed_token(secret_key, token, expected_type="overlay_ws")
+
+
+def _decode_typed_token(secret_key: str, token: str, *, expected_type: str) -> dict[str, Any]:
     try:
         payload = jwt_decode(token, secret_key, algorithms=["HS256"])
     except InvalidTokenError as exc:
         raise AuthError("invalid or expired token") from exc
-    if payload.get("typ") != "access":
+    if payload.get("typ") != expected_type:
         raise AuthError("invalid token type")
     return payload

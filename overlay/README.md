@@ -1,5 +1,12 @@
-# Color Rush Live overlay (skeleton)
+# Color Rush Live overlay
 
-OBS browser-source overlay. Implemented in milestone 4. This directory is a placeholder so the repository layout matches the master specification.
+Vite + TypeScript + GSAP OBS Browser Source. No React. No CDN. No operator secrets in the bundle.
 
-No runtime CDN dependencies. No operator secrets in this bundle.
+```powershell
+npm ci
+npm run test
+npm run test:e2e
+npm run build
+```
+
+Served by the API at `/overlay` after build. See `docs/OBS_SETUP.md`.

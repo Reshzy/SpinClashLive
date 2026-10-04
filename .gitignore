@@ -31,6 +31,9 @@ desktop/.venv/
 overlay/node_modules/
 overlay/dist/
 overlay/.vite/
+overlay/test-results/
+overlay/playwright-report/
+overlay/tests/e2e/artifacts/
 
 # IDE / OS
 .idea/

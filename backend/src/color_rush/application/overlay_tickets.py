@@ -6,9 +6,9 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from color_rush.domain.errors import NotFoundError
+from color_rush.domain.errors import AuthError, NotFoundError
 from color_rush.infrastructure.persistence.models import OverlayTicket
-from color_rush.infrastructure.security import hash_secret, new_token
+from color_rush.infrastructure.security import create_overlay_ws_token, hash_secret, new_token
 
 
 def create_overlay_ticket(
@@ -56,3 +56,25 @@ def resolve_overlay_ticket(session: Session, secret: str, now: datetime) -> Over
 
 def list_overlay_tickets(session: Session, game_id: UUID) -> list[OverlayTicket]:
     return list(session.scalars(select(OverlayTicket).where(OverlayTicket.game_id == game_id)))
+
+
+def exchange_overlay_ws_ticket(
+    session: Session,
+    *,
+    secret: str,
+    secret_key: str,
+    now: datetime,
+    ttl_seconds: int,
+) -> tuple[str, OverlayTicket]:
+    if not secret.strip():
+        raise AuthError("overlay ticket required")
+    row = resolve_overlay_ticket(session, secret.strip(), now)
+    token = create_overlay_ws_token(
+        secret_key=secret_key,
+        ticket_id=row.id,
+        game_id=row.game_id,
+        session_id=row.session_id,
+        ttl_seconds=ttl_seconds,
+        now=now,
+    )
+    return token, row

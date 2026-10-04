@@ -4,12 +4,13 @@ from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.orm import Session
 
 from color_rush.application.players import player_ranks
 from color_rush.application.source_health import session_source_health
-from color_rush.domain.enums import Color, PeriodType
+from color_rush.domain.enums import Color, PeriodStatus, PeriodType, RoundState
+from color_rush.domain.rules import RoundRules
 from color_rush.infrastructure.persistence.models import (
     ChampionAward,
     GameSession,
@@ -35,10 +36,65 @@ HELP_CARD = {
     "commands": "!red / !gold / !green",
     "copy": (
         "Make your pick. Predictions open until picks locked. "
-        "Points earned never go negative. Tie order is points then player id."
+        "Points earned never go negative. Tie order is points then player id. "
+        "Chances are 47.5% Red, 47.5% Green, 5% Gold."
     ),
     "note": "Delivery is not guaranteed before the deadline.",
+    "percentages": {"red": 47.5, "gold": 5.0, "green": 47.5},
 }
+
+LEADERBOARD_ROTATION_S = 20
+SCOPE_TITLES = {
+    PeriodType.WEEKLY: "Weekly",
+    PeriodType.DAILY: "Daily",
+    PeriodType.SEASON: "Season",
+    PeriodType.ALL_TIME: "All-Time",
+}
+_ROTATION_CYCLE = (
+    PeriodType.WEEKLY,
+    PeriodType.DAILY,
+    PeriodType.SEASON,
+    PeriodType.WEEKLY,
+    PeriodType.DAILY,
+    PeriodType.ALL_TIME,
+)
+
+
+def rotating_scope(now: datetime) -> PeriodType:
+    index = int(now.timestamp() // LEADERBOARD_ROTATION_S) % len(_ROTATION_CYCLE)
+    return _ROTATION_CYCLE[index]
+
+
+def award_status_for(state: str | None) -> str:
+    if state in {RoundState.SPINNING.value, RoundState.RESULT.value, RoundState.SETTLING.value}:
+        return "pending"
+    if state == RoundState.SETTLED.value:
+        return "committed"
+    if state == RoundState.CANCELLED.value:
+        return "cancelled"
+    return "none"
+
+
+def overlay_rules_view(raw: dict[str, Any] | None) -> dict[str, Any]:
+    try:
+        rules = RoundRules.from_snapshot(raw or {})
+    except Exception:
+        rules = RoundRules()
+    return {
+        "rewards": {
+            "red": rules.effective_reward(Color.RED),
+            "gold": rules.effective_reward(Color.GOLD),
+            "green": rules.effective_reward(Color.GREEN),
+        },
+        "weights": {
+            "red": rules.red_weight,
+            "gold": rules.gold_weight,
+            "green": rules.green_weight,
+        },
+        "bonus": rules.bonus.value,
+        "gold_bonus_reward": rules.gold_bonus_reward,
+        "percentages": {"red": 47.5, "gold": 5.0, "green": 47.5},
+    }
 
 
 def build_snapshot(
@@ -48,7 +104,7 @@ def build_snapshot(
     now: datetime,
 ) -> dict[str, Any]:
     rnd = session.get(Round, game_session.active_round_id) if game_session.active_round_id else None
-    rules = rnd.rules_snapshot if rnd is not None else {}
+    state = rnd.state if rnd is not None else RoundState.WAITING.value
     counts = {"red": 0, "gold": 0, "green": 0}
     recent_players: dict[str, list[dict[str, str]]] = {"red": [], "gold": [], "green": []}
     if rnd is not None and redis_available(redis):
@@ -69,33 +125,7 @@ def build_snapshot(
                     }
                 )
 
-    leaderboard: dict[str, Any] = {"scope": "weekly", "period_id": None, "entries": []}
-    weekly = session.scalar(
-        select(LeaderboardPeriod)
-        .where(
-            LeaderboardPeriod.game_id == game_session.game_id,
-            LeaderboardPeriod.period_type == PeriodType.WEEKLY.value,
-        )
-        .order_by(LeaderboardPeriod.starts_at.desc())
-    )
-    if weekly is not None:
-        leaderboard["period_id"] = str(weekly.id)
-        if redis_available(redis):
-            entries = []
-            for player_id, points, rank in top_n(redis, game_id=game_session.game_id, period_id=weekly.id, limit=10):
-                player = session.get(Player, player_id)
-                entries.append(
-                    {
-                        "rank": rank,
-                        "player_id": str(player_id),
-                        "display_name": sanitize_name(player.display_name if player else "player"),
-                        "points": points,
-                    }
-                )
-            leaderboard["entries"] = entries
-        else:
-            leaderboard["status"] = "Refreshing"
-
+    leaderboard = _leaderboard_payload(session, redis, game_session.game_id, rotating_scope(now))
     history = recent_history(redis, game_session.game_id) if redis_available(redis) else []
     lookup = list_lookup(redis, game_session.game_id) if redis_available(redis) else []
     ceremony = None
@@ -107,20 +137,14 @@ def build_snapshot(
             "title": award.display_title,
             "player_id": str(award.player_id),
             "display_name": sanitize_name(player.display_name if player else "player"),
+            "created_at": award.created_at.isoformat(),
         }
 
     health = session_source_health(session, game_session)
     data = {
-        "state": rnd.state if rnd is not None else "waiting",
+        "state": state,
         "closes_at": rnd.scheduled_closes_at.isoformat() if rnd is not None and rnd.scheduled_closes_at else None,
-        "rules": {
-            "rewards": {
-                "red": rules.get("red_reward", 2),
-                "gold": rules.get("gold_reward", 14),
-                "green": rules.get("green_reward", 2),
-            },
-            "bonus": rules.get("bonus", "none"),
-        },
+        "rules": overlay_rules_view(rnd.rules_snapshot if rnd is not None else None),
         "counts": counts,
         "recent_players": recent_players,
         "leaderboard": leaderboard,
@@ -138,6 +162,9 @@ def build_snapshot(
         "round_number": rnd.number if rnd is not None else None,
         "session_revision": game_session.revision,
         "help": HELP_CARD,
+        "award_status": award_status_for(state),
+        "projection_fresh_at": now.isoformat(),
+        "layout_version": 1,
     }
     envelope = {
         "schema_version": 1,
@@ -171,6 +198,50 @@ def enqueue_lookup_card(session: Session, redis: Any, game_id: UUID, player_id: 
     payload["expires_at"] = now.timestamp() + 60
     payload["request_id"] = new_token(8)
     push_lookup(redis, game_id, payload)
+
+
+def _leaderboard_payload(session: Session, redis: Any, game_id: UUID, scope: PeriodType) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "scope": scope.value,
+        "period_id": None,
+        "status": None,
+        "label": SCOPE_TITLES[scope],
+        "entries": [],
+    }
+    status_rank = case(
+        (LeaderboardPeriod.status == PeriodStatus.OPEN.value, 0),
+        (LeaderboardPeriod.status == PeriodStatus.CLOSING.value, 1),
+        else_=2,
+    )
+    period = session.scalar(
+        select(LeaderboardPeriod)
+        .where(
+            LeaderboardPeriod.game_id == game_id,
+            LeaderboardPeriod.period_type == scope.value,
+        )
+        .order_by(status_rank, LeaderboardPeriod.starts_at.desc())
+    )
+    if period is None:
+        return payload
+    payload["period_id"] = str(period.id)
+    payload["status"] = period.status
+    payload["label"] = f"{SCOPE_TITLES[scope]} · {period.local_identity}"
+    if not redis_available(redis):
+        payload["status"] = "Refreshing"
+        return payload
+    entries = []
+    for player_id, points, rank in top_n(redis, game_id=game_id, period_id=period.id, limit=10):
+        player = session.get(Player, player_id)
+        entries.append(
+            {
+                "rank": rank,
+                "player_id": str(player_id),
+                "display_name": sanitize_name(player.display_name if player else "player"),
+                "points": points,
+            }
+        )
+    payload["entries"] = entries
+    return payload
 
 
 def _split_recent(item: str) -> dict[str, str]:

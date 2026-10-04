@@ -34,6 +34,21 @@ export interface HTTPValidationError {
   detail?: Array<ValidationError>;
 }
 
+export interface LeaderboardEntryPayload {
+  rank: number;
+  player_id: string;
+  display_name: string;
+  points: number;
+}
+
+export interface LeaderboardPayload {
+  scope: string;
+  period_id?: string | unknown;
+  status?: string | unknown;
+  label?: string | unknown;
+  entries?: Array<LeaderboardEntryPayload>;
+}
+
 export interface LoginRequest {
   username: string;
   password: string;
@@ -62,6 +77,27 @@ export interface OverlayTicketCreated {
   ticket_id: string;
   secret: string;
   obs_url: string;
+}
+
+export interface OverlayWsTicketRequest {
+  secret?: string | unknown;
+}
+
+export interface OverlayWsTicketResponse {
+  ticket: string;
+  expires_in: number;
+  ws_path?: string;
+}
+
+export interface PresentationPlanPayload {
+  animation_id: string;
+  starts_at: string;
+  ends_at: string;
+  duration_s: number;
+  layout_version: number;
+  target_color: string;
+  target_slot: number;
+  target_offset?: number;
 }
 
 export interface RefreshRequest {
@@ -124,6 +160,46 @@ export interface SimStartRound {
   fence_token: number;
 }
 
+export interface SnapshotDataPayload {
+  state: string;
+  closes_at?: string | unknown;
+  rules: SnapshotRulesPayload;
+  counts: Record<string, unknown>;
+  recent_players: Record<string, unknown>;
+  leaderboard: LeaderboardPayload;
+  recent_results: Array<string>;
+  source_status: string;
+  animation_plan?: PresentationPlanPayload | unknown;
+  lookup?: Array<Record<string, unknown>>;
+  ceremony?: Record<string, unknown> | unknown;
+  award_status?: string;
+  projection_fresh_at?: string | unknown;
+  paused?: boolean;
+  mode?: string | unknown;
+  source_mode?: string | unknown;
+  round_number?: number | unknown;
+  session_revision?: number;
+  help?: Record<string, unknown> | unknown;
+}
+
+export interface SnapshotEnvelopePayload {
+  schema_version: number;
+  type: string;
+  session_id: string;
+  round_id?: string | unknown;
+  snapshot_sequence: number;
+  server_time: string;
+  data: SnapshotDataPayload;
+}
+
+export interface SnapshotRulesPayload {
+  rewards: Record<string, unknown>;
+  weights?: Record<string, unknown> | unknown;
+  bonus?: string;
+  gold_bonus_reward?: number | unknown;
+  percentages?: Record<string, unknown> | unknown;
+}
+
 export interface TokenResponse {
   access_token: string;
   refresh_token: string;
@@ -162,6 +238,7 @@ export type ApiPaths =
   | "/api/v1/auth/refresh"
   | "/api/v1/auth/logout"
   | "/api/v1/game/snapshot"
+  | "/api/v1/overlay/ws-ticket"
   | "/api/v1/rounds/{round_id}"
   | "/api/v1/leaderboards"
   | "/api/v1/periods/{period_id}/champions"
@@ -204,5 +281,7 @@ export type ApiPaths =
   | "/simulation/rounds/drain"
   | "/simulation/rounds/spin"
   | "/simulation/rounds/settle"
+  | "/overlay/"
   | "/overlay"
+  | "/overlay/{asset_path}"
 ;

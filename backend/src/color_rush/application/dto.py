@@ -76,6 +76,7 @@ class SnapshotData:
     projection_fresh_at: datetime | None = None
     lookup: dict[str, object] | None = None
     ceremony: dict[str, object] | None = None
+    award_status: str = "none"
     paused: bool = False
     round_number: int | None = None
     session_revision: int = 1

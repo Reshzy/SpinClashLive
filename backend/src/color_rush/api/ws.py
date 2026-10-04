@@ -3,19 +3,21 @@ from __future__ import annotations
 import asyncio
 import json
 from typing import Any
+from uuid import UUID
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from color_rush.application.auth import get_user
 from color_rush.application.overlay_tickets import resolve_overlay_ticket
 from color_rush.application.snapshots import cached_or_build
-from color_rush.composition import get_runtime_container
+from color_rush.composition import AppContainer, get_runtime_container
 from color_rush.domain.clock import utc_now
-from color_rush.domain.errors import AuthError
+from color_rush.domain.errors import AuthError, NotFoundError
 from color_rush.infrastructure.persistence.db import session_scope
 from color_rush.infrastructure.persistence.models import GameSession
-from color_rush.infrastructure.security import decode_access_token
+from color_rush.infrastructure.security import decode_access_token, decode_overlay_ws_token
 
 ws_router = APIRouter()
 MAX_BUFFER = 8
@@ -33,10 +35,7 @@ async def overlay_ws(websocket: WebSocket) -> None:
     try:
         token = await _read_auth(websocket)
         with session_scope(container.session_factory) as session:
-            ticket = resolve_overlay_ticket(session, token, utc_now())
-            game_session = session.get(GameSession, ticket.session_id) if ticket.session_id else session.scalar(
-                select(GameSession).order_by(GameSession.created_at.desc())
-            )
+            game_session = _game_session_for_overlay(session, container, token)
             if game_session is None:
                 await websocket.close(code=4404)
                 return
@@ -44,7 +43,7 @@ async def overlay_ws(websocket: WebSocket) -> None:
             game_id = game_session.game_id
         await _send_bounded(websocket, snapshot)
         await _pump(websocket, str(game_id), operator=False)
-    except (AuthError, TimeoutError, WebSocketDisconnect):
+    except (AuthError, NotFoundError, TimeoutError, WebSocketDisconnect, json.JSONDecodeError):
         await websocket.close(code=4401)
 
 
@@ -59,7 +58,7 @@ async def admin_ws(websocket: WebSocket) -> None:
         token = await _read_auth(websocket)
         payload = decode_access_token(container.settings.secret_key, token)
         with session_scope(container.session_factory) as session:
-            get_user(session, __import__("uuid").UUID(str(payload["sub"])))
+            get_user(session, UUID(str(payload["sub"])))
             game_session = session.scalar(select(GameSession).order_by(GameSession.created_at.desc()))
             if game_session is None:
                 await websocket.close(code=4404)
@@ -68,8 +67,25 @@ async def admin_ws(websocket: WebSocket) -> None:
             game_id = game_session.game_id
         await _send_bounded(websocket, snapshot)
         await _pump(websocket, str(game_id), operator=True)
-    except (AuthError, TimeoutError, WebSocketDisconnect):
+    except (AuthError, TimeoutError, WebSocketDisconnect, json.JSONDecodeError):
         await websocket.close(code=4401)
+
+
+def _game_session_for_overlay(session: Session, container: AppContainer, token: str) -> GameSession | None:
+    try:
+        payload = decode_overlay_ws_token(container.settings.secret_key, token)
+        session_id = payload.get("session_id")
+        if session_id:
+            found = session.get(GameSession, UUID(str(session_id)))
+            if found is not None:
+                return found
+    except AuthError:
+        ticket = resolve_overlay_ticket(session, token, utc_now())
+        if ticket.session_id is not None:
+            found = session.get(GameSession, ticket.session_id)
+            if found is not None:
+                return found
+    return session.scalar(select(GameSession).order_by(GameSession.created_at.desc()))
 
 
 def _origin_allowed(websocket: WebSocket, container: object) -> bool:

@@ -27,12 +27,15 @@ from color_rush.api.schemas import (
     NextBonusRequest,
     OverlayTicketCreated,
     OverlayTicketCreateRequest,
+    OverlayWsTicketRequest,
+    OverlayWsTicketResponse,
     RefreshRequest,
     RoundStartRequest,
     SeasonCreateRequest,
     SessionActionRequest,
     SessionCreateRequest,
     SettingsPutRequest,
+    SnapshotEnvelopePayload,
     TokenResponse,
     YoutubeConnectRequest,
     YoutubeOAuthRevokeRequest,
@@ -41,7 +44,12 @@ from color_rush.api.schemas import (
 from color_rush.application.auth import create_admin_user, list_admin_users, login, logout, refresh_tokens, require_role
 from color_rush.application.moderation import set_moderation
 from color_rush.application.outbox import sweep_incomplete_jobs
-from color_rush.application.overlay_tickets import create_overlay_ticket, list_overlay_tickets, revoke_overlay_ticket
+from color_rush.application.overlay_tickets import (
+    create_overlay_ticket,
+    exchange_overlay_ws_ticket,
+    list_overlay_tickets,
+    revoke_overlay_ticket,
+)
 from color_rush.application.periods import finalize_due_periods
 from color_rush.application.players import (
     delete_player_data,
@@ -107,7 +115,7 @@ def auth_logout(body: RefreshRequest, session: Annotated[Session, Depends(db_ses
     return {"status": "ok"}
 
 
-@game_router.get("/game/snapshot")
+@game_router.get("/game/snapshot", response_model=SnapshotEnvelopePayload)
 def game_snapshot(
     session: Annotated[Session, Depends(db_session)],
     container: Annotated[AppContainer, Depends(container_dep)],
@@ -117,6 +125,33 @@ def game_snapshot(
     del user
     game_session = _active_session(session, session_id)
     return cached_or_build(session, container.redis, game_session, utc_now())
+
+
+@game_router.post("/overlay/ws-ticket", response_model=OverlayWsTicketResponse)
+def overlay_ws_ticket(
+    request: Request,
+    session: Annotated[Session, Depends(db_session)],
+    container: Annotated[AppContainer, Depends(container_dep)],
+    body: OverlayWsTicketRequest | None = None,
+) -> OverlayWsTicketResponse:
+    secret = ""
+    authorization = request.headers.get("authorization") or ""
+    if authorization.lower().startswith("bearer "):
+        secret = authorization.split(" ", 1)[1].strip()
+    if body is not None and body.secret:
+        secret = body.secret
+    rid = request_id_of(request)
+    if not secret:
+        raise http_error(401, "auth_error", "overlay ticket required", rid)
+    ttl = container.settings.overlay_ws_ticket_ttl_seconds
+    token, _row = exchange_overlay_ws_ticket(
+        session,
+        secret=secret,
+        secret_key=container.settings.secret_key,
+        now=utc_now(),
+        ttl_seconds=ttl,
+    )
+    return OverlayWsTicketResponse(ticket=token, expires_in=ttl)
 
 
 @game_router.get("/rounds/{round_id}")

@@ -66,7 +66,13 @@ Ordinary choices resolved during milestone 1. Update when a decision changes a c
 | API process | Uvicorn + FastAPI `/api/v1` + `/ws/v1`; no scheduler in Uvicorn | Console/overlay clients |
 | Worker process | `python -m color_rush.workers` with `COLOR_RUSH_WORKER_ROLE` | coordinator,ingest,settlement,outbox,projection,gateway,retention,all |
 | Compose services | `api`, `worker`, `postgres`, `redis` | Redis required for projections/WS |
-| Desktop / overlay | PySide6 console in M3; overlay still M4 | Console is API client only |
+| Desktop / overlay | PySide6 console + Vite overlay served at `/overlay` | Overlay is a read-only OBS client |
+| Overlay stack | Vite, TypeScript, CSS, locally bundled GSAP; no React | Master §4; no CDN |
+| Strip layout v1 | 40 tiles, 19 red / 19 green / 2 gold at indexes 9 and 28 | Matches 47.5 / 47.5 / 5 without equal-width deception |
+| Presentation slot | Persisted `target_slot` is a matching strip index; `target_color` is authoritative | Reload/reconnect lands the same color |
+| Overlay tickets | Fragment secret → `POST /api/v1/overlay/ws-ticket` (JWT `typ=overlay_ws`, 120s) → first WS message | Avoids putting the long-lived secret in query logs |
+| Leaderboard rotation | Gateway rotates snapshot `leaderboard` every 20s: weekly, daily, season, weekly, daily, all-time | Overlay cannot call operator REST |
+| Award copy | Snapshot `award_status` none/pending/committed/cancelled | Visual result does not imply committed scores |
 | Desktop networking | QThread + httpx REST; QWebSocket on GUI thread | Master: one nonblocking strategy; all widget updates on GUI thread |
 | Desktop secrets | OS keyring service `color-rush-live` stores refresh token + API base | Never Google tokens or SQL/Redis |
 | Desktop packaging | PyInstaller spec `desktop/packaging/color_rush_desktop.spec` | Exclude .env and simulation data |
