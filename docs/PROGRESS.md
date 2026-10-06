@@ -2,7 +2,7 @@
 
 Working product name: Color Rush Live  
 Repository root: this folder  
-Current milestone: 5 — Reliability, scale, packaging — **implemented and verified locally; master load targets not met on this laptop; some external checks blocked**
+Current milestone: 5 — Reliability, scale, packaging — **implemented and verified locally; master load targets not met on this laptop; private YouTube ingest passed; production API-use and GitLab CI still blocked**
 
 ## Environment (this session)
 
@@ -61,23 +61,23 @@ python -m uv run python scripts/load/run_harness.py --profile unique --players 2
 
 Load numbers: see `docs/CAPACITY_REPORT.md`. Sustained 1k/10min and 100k unique **not run** after burst peaked at ~225 cmd/s.
 
-Native PyInstaller artifact **not built** (command remains `uv run pyinstaller desktop/packaging/color_rush_desktop.spec`).
+Native PyInstaller artifact: **operator reported built** (`uv run pyinstaller desktop/packaging/color_rush_desktop.spec`). Not re-run this handoff.
 
-OBS Studio Browser Source: **not executed**.
+OBS Studio Browser Source: **operator reported done** (`docs/OBS_SETUP.md`). Not re-run this handoff.
 
-Live YouTube private-stream + OAuth: **blocked** (no Google secrets in `.env`).
+Live YouTube private-stream + OAuth: **passed 2026-10-06** on DB `color_rush` + Redis DB 1. Browser OAuth, connect, source healthy, inbox `!red` (`rejected_not_open` — no OPEN round). Public/production use is **not** cleared; see `docs/SECURITY_AND_DATA.md`.
 
-GitLab CI pipeline: **not executed** (file `.gitlab-ci.yml` includes ruff, secret scan, contracts, mypy, pytest, overlay).
+GitLab CI pipeline: **blocked**. Origin is GitHub only (`origin/init-laptop`). `.gitlab-ci.yml` was not executed on a GitLab runner.
 
 ## Milestone status
 
 | Milestone | Status |
 | --- | --- |
 | 1 Foundation, rules, durable scoring | **Complete.** |
-| 2 YouTube ingest, API, realtime projections | **Complete** locally. Live YouTube **blocked**. |
+| 2 YouTube ingest, API, realtime projections | **Complete** locally. Private/unlisted live ingest **passed** 2026-10-06. Production API-use review **recorded, not cleared**. |
 | 3 PySide6 operator console | **Complete** locally. |
-| 4 OBS overlay | **Complete** locally (browser + API). OBS Studio **blocked**. |
-| 5 Reliability, scale, packaging | **Implemented and locally verified.** Master 1k/5k/100k load targets **not met** on this laptop; live YouTube/OBS/GitLab/PyInstaller remain external. |
+| 4 OBS overlay | **Complete** locally (browser + API). OBS Studio **operator reported done**. |
+| 5 Reliability, scale, packaging | **Implemented and locally verified.** Master 1k/5k/100k load targets **not met** on this laptop. GitLab CI **blocked** (GitHub-only remote). |
 
 ## Milestone 5 delivered
 
@@ -89,14 +89,13 @@ GitLab CI pipeline: **not executed** (file `.gitlab-ci.yml` includes ruff, secre
 - Production Compose worker joins `edge` + `internal` so YouTube ingest can egress; Postgres/Redis stay unpublished
 - `docs/OPERATIONS.md`, `docs/CAPACITY_REPORT.md`, TLS Compose example, backup scripts, `.gitlab-ci.yml` (contracts check added)
 - Scrubbed live Google credentials from `.env.example`
+- Worker YouTube ingest now refreshes the stored OAuth token and passes `access_token` into `YouTubeChatSource` (required for private/unlisted chat)
 
 ## Remaining external validation
 
-- Native Windows PyInstaller build
-- OBS Browser Source (`docs/OBS_SETUP.md`)
-- Live YouTube private stream (`docs/YOUTUBE_SETUP.md`)
-- YouTube API-use / retention review (`docs/SECURITY_AND_DATA.md`)
-- GitLab pipeline on a runner with Docker services
-- Master load targets on stronger hardware (this laptop measured ~150–225 cmd/s)
+- GitLab pipeline on a GitLab runner with Docker services (skipped this session; GitHub-only remote)
+- Production API-use follow-ups in `docs/SECURITY_AND_DATA.md`: privacy/ToS links, 30-day identifier refresh/unlink, viewer deletion path, unresolved III.F.3.c chat-command scoring
+- Master load targets on stronger hardware (this laptop measured ~150–225 cmd/s). Do not start the scaling list in `docs/OPERATIONS.md` until a bigger box remeasures the bottleneck.
+- Public live broadcast — **blocked** until the API-use follow-ups are closed. Private technical ingest is not production clearance.
 
-Do not treat blocked items as passed.
+Do not treat blocked items as passed. Do not treat M5 as production-ready.

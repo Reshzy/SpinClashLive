@@ -82,18 +82,27 @@ For private/unlisted chat, create **OAuth 2.0 Client ID** (Web application) on t
 
 ## Private-stream acceptance
 
-Requires live credentials. Do not mark this passed without running it.
+Ran 2026-10-06 on this laptop against a **separate** production database (not `color_rush_sim`). Isolation used:
+
+- `COLOR_RUSH_ENV=production`
+- `DATABASE_URL=postgresql+psycopg://color_rush:color_rush@127.0.0.1:5433/color_rush`
+- `REDIS_URL=redis://127.0.0.1:6379/1`
+
+Operator completed Google consent (`youtube.readonly`). `POST /api/v1/admin/youtube/connect` resolved a live chat ID. `GET /api/v1/admin/source` reported **healthy**. Chat `!red` produced a YouTube inbox row (`command=red`, `decision_reason=rejected_not_open` because no OPEN round). That is technical ingest evidence, **not** production or public-broadcast clearance (`docs/SECURITY_AND_DATA.md`).
+
+The ingest worker must refresh the stored OAuth token and pass `access_token` into `YouTubeChatSource`. API-key-only reads are not enough for private/unlisted chat.
 
 ```powershell
-$env:GOOGLE_API_KEY = "<restricted-key>"
 $env:COLOR_RUSH_ENV = "production"
+$env:DATABASE_URL = "postgresql+psycopg://color_rush:color_rush@127.0.0.1:5433/color_rush"
+$env:REDIS_URL = "redis://127.0.0.1:6379/1"
 uv run alembic upgrade head
 uv run python -m color_rush.bootstrap
-# login as owner, POST /api/v1/admin/youtube/connect with the private video id
+# login as owner, Authorize in browser, POST /api/v1/admin/youtube/connect with the video id
 # confirm source health is healthy, send !red in chat, confirm an inbox row
 ```
 
-If a live broadcast is not connected, live verification is **blocked**. Fixture tests under `backend/tests/application/test_youtube_contracts.py` check official JSON shapes only; they do not prove live API access.
+Fixture tests under `backend/tests/application/test_youtube_contracts.py` check official JSON shapes only; they do not prove live API access.
 
 ## Generate gRPC stubs
 

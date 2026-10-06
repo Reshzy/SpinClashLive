@@ -89,18 +89,22 @@ def _tick_ingest(container: AppContainer) -> None:
         sessions = list(session.scalars(select(GameSession)))
     for game_session in sessions:
         if game_session.source_mode == "youtube" and game_session.live_chat_ref:
+            from color_rush.application.youtube_connect import _oauth_access_token
             from color_rush.infrastructure.youtube.source import YouTubeChatSource
 
             checkpoint = None
+            access_token = None
             with session_scope(container.session_factory) as session:
                 if game_session.broadcast_ref:
                     checkpoint = session.get(SourceCheckpoint, game_session.broadcast_ref)
+                access_token = _oauth_access_token(session, container.settings, game_session.game_id)
             yt_source = YouTubeChatSource(
                 live_chat_id=game_session.live_chat_ref,
                 broadcast_id=game_session.broadcast_ref or game_session.live_chat_ref,
                 ownership_token=container.worker_id,
                 transport=container.settings.youtube_transport,
                 api_key=container.settings.google_api_key,
+                access_token=access_token,
                 session_id=game_session.id,
                 page_token=checkpoint.next_page_token if checkpoint else None,
             )

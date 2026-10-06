@@ -30,7 +30,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | --- | --- | --- | --- | --- |
 | R3.1 | Independent backend, migrations, workers | M1 | package + Alembic + worker entry | `alembic upgrade head` + `pytest` 74 passed |
 | R3.2 | Secure operator API | M2 | `api/routes.py`, JWT, roles, idempotency | `test_auth_roles_and_overlay_ticket` passed |
-| R3.3 | Simulation source + real YouTube source | M2 | `SimulationChatSource`, `YouTubeChatSource` | sim source + YouTube fixture tests passed; live YouTube **blocked** (no live broadcast connected; local `GOOGLE_*` in `.env`) |
+| R3.3 | Simulation source + real YouTube source | M2 | `SimulationChatSource`, `YouTubeChatSource` | sim source + YouTube fixture tests passed; private/unlisted live OAuth + inbox **passed** 2026-10-06; public/production API-use **not cleared** |
 | R3.4 | OBS overlay | M4 | `overlay/` Vite app served at `/overlay` | Vitest 10 passed; Playwright 6 passed; live `/overlay` + overlay WS **passed** |
 | R3.5 | Manual/auto, durable ingest, scoring, pause/cancel, bonuses | M1 | application services | integration tests |
 | R3.6 | Four leaderboards, ranks, archives, champions | M1 SQL; M2 Redis; M4 display | settlement + rotating snapshot board | period tests; overlay board rotation |
@@ -125,10 +125,10 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| R11.1 | Official streamList + list fallback | M2 | `infrastructure/youtube/` + vendored proto | `test_youtube_contracts.py` fixture shapes passed; live API **blocked** |
+| R11.1 | Official streamList + list fallback | M2 | `infrastructure/youtube/` + vendored proto | `test_youtube_contracts.py` fixture shapes passed; private/unlisted live ingest **passed** 2026-10-06 (source healthy, inbox `red`) |
 | R11.2 | Simulation implements same source interface | M2 | `ChatSource` + `SimulationChatSource` | `test_simulation_source_covers_required_shapes` passed |
 | R11.3 | Isolated sim data/config | M1 | env + DB URL | config tests |
-| R11.4 | API data vs game data, retention, deletion | M2 `SECURITY_AND_DATA.md` | docs + delete-data route | `test_sql_scores_survive_without_redis`; production API-use review still outstanding |
+| R11.4 | API data vs game data, retention, deletion | M2 `SECURITY_AND_DATA.md` | docs + delete-data route | `test_sql_scores_survive_without_redis`; production API-use review **recorded 2026-10-06 — production not cleared** |
 
 ## Master §12 REST and realtime
 
@@ -144,7 +144,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R13.1 | Dark sidebar console, 9 pages, orange accent | M3 | `desktop/src/color_rush_desktop/views` | `test_login_error_and_shell_pages` passed |
 | R13.2 | Nonblocking QThread+httpx; GUI-thread mutations | M3 | `api_client/worker.py`, `viewmodels/session.py` | `test_slow_network_keeps_ui_clickable` passed |
 | R13.3 | Real authenticated actions, no optimistic round state | M3 | Dashboard/YouTube/… pages | `test_failed_action_keeps_round_state` passed |
-| R13.4 | Login/refresh/keyring; Google via system browser | M3 | login + YouTube page + backend OAuth routes | OAuth unit tests passed; live Google **blocked** |
+| R13.4 | Login/refresh/keyring; Google via system browser | M3 | login + YouTube page + backend OAuth routes | OAuth unit tests passed; live Google browser consent **passed** 2026-10-06 (`auth_mode=oauth`) |
 | R13.5 | Players/leaderboards pagination, ranks, champions | M3 | players/leaderboards pages + cursor APIs | Qt + route registration tests |
 | R13.6 | Overlay tickets, OBS URL, 1080/720 instructions | M3/M4 | overlay_setup page; `docs/OBS_SETUP.md` | ticket exchange live; Playwright 1080/720 |
 | R13.7 | Roles hide and server-enforce | M3 | `roles.py` + backend WRITE_ROLES | `test_moderator_cannot_save_settings` passed |
@@ -192,9 +192,9 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | A7 | SQL/Redis ties; archives once | M1 SQL; M2 Redis | ranking + Redis ZADD | PG zero-point ties + `test_zero_score_tie_order_matches_sql_policy` passed |
 | A8 | Pause/cancel/auto/bonus/unhealthy source | M1 controls; M2 source | coordinator + source_health | pause/cancel/bonus PG tests + `test_source_lag_pauses_new_rounds` passed |
 | A9 | Console responsiveness | M3 | QThread + Dashboard | `test_slow_network_keeps_ui_clickable` passed |
-| A10 | Overlay lands on every color; reload phases | M4 | GSAP + snapshot reconstruct | Playwright spinning/gold/reload; OBS **blocked** |
+| A10 | Overlay lands on every color; reload phases | M4 | GSAP + snapshot reconstruct | Playwright spinning/gold/reload; OBS Browser Source **operator reported done** |
 | A11 | Safe overlay text; 1080/720 screenshots | M4 | sanitize + Playwright | screenshots captured; no wagering UI |
-| A12 | Token/retention tests | M2 | JWT expiry, overlay tickets, 7-day command purge | `test_password_and_jwt_roundtrip`; live YouTube token revoke **blocked** |
+| A12 | Token/retention tests | M2 | JWT expiry, overlay tickets, 7-day command purge | `test_password_and_jwt_roundtrip`; live OAuth connect **passed**; live revoke **not run** this session |
 | A13 | Capacity evidence | M5 | `docs/CAPACITY_REPORT.md` | subset/burst/2k unique recorded; master 1k/5k/100k targets **not met** on this laptop |
-| A14 | CI + packaging consistency | M5 | `.gitlab-ci.yml`, PyInstaller spec, setup scripts | local ruff/mypy/pytest/overlay; GitLab pipeline **not executed** here; native PyInstaller artifact **not built** |
+| A14 | CI + packaging consistency | M5 | `.gitlab-ci.yml`, PyInstaller spec, setup scripts | local ruff/mypy/pytest/overlay; native PyInstaller **operator reported built**; GitLab pipeline **blocked** (GitHub-only remote) |
 | A15 | Final progress report | M5 | `docs/PROGRESS.md` | this milestone |
