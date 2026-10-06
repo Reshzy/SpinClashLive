@@ -787,6 +787,63 @@
         ]
       }
     },
+    "/api/v1/admin/projections/rebuild": {
+      "post": {
+        "tags": [
+          "admin"
+        ],
+        "summary": "Admin Rebuild Projections",
+        "operationId": "admin_rebuild_projections_api_v1_admin_projections_rebuild_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "game_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Game Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Admin Rebuild Projections Api V1 Admin Projections Rebuild Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/admin/audit": {
       "get": {
         "tags": [
@@ -2567,6 +2624,46 @@
         }
       }
     },
+    "/simulation/commands/batch": {
+      "post": {
+        "summary": "Simulation Commands Batch",
+        "operationId": "simulation_commands_batch_simulation_commands_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimCommandBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "type": "object",
+                  "title": "Response Simulation Commands Batch Simulation Commands Batch Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/simulation/rounds/start": {
       "post": {
         "summary": "Simulation Start",
@@ -3512,6 +3609,43 @@
           "message_id"
         ],
         "title": "SimCommand"
+      },
+      "SimCommandBatch": {
+        "properties": {
+          "session_id": {
+            "type": "string",
+            "title": "Session Id"
+          },
+          "broadcast_id": {
+            "type": "string",
+            "title": "Broadcast Id",
+            "default": "sim-broadcast"
+          },
+          "page_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Token"
+          },
+          "commands": {
+            "items": {
+              "$ref": "#/components/schemas/SimCommand"
+            },
+            "type": "array",
+            "title": "Commands"
+          }
+        },
+        "type": "object",
+        "required": [
+          "session_id",
+          "commands"
+        ],
+        "title": "SimCommandBatch"
       },
       "SimSpin": {
         "properties": {

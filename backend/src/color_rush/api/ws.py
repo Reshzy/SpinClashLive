@@ -12,15 +12,16 @@ from sqlalchemy.orm import Session
 from color_rush.application.auth import get_user
 from color_rush.application.overlay_tickets import resolve_overlay_ticket
 from color_rush.application.snapshots import cached_or_build
+from color_rush.application.ws_buffer import SnapshotClientBuffer
 from color_rush.composition import AppContainer, get_runtime_container
 from color_rush.domain.clock import utc_now
 from color_rush.domain.errors import AuthError, NotFoundError
 from color_rush.infrastructure.persistence.db import session_scope
 from color_rush.infrastructure.persistence.models import GameSession
 from color_rush.infrastructure.security import decode_access_token, decode_overlay_ws_token
+from color_rush.observability.metrics import SNAPSHOT_DROPPED, record_snapshot_bytes
 
 ws_router = APIRouter()
-MAX_BUFFER = 8
 AUTH_DEADLINE_S = 5.0
 MAX_PAYLOAD = 32 * 1024
 
@@ -112,7 +113,9 @@ async def _read_auth(websocket: WebSocket) -> str:
 
 async def _send_bounded(websocket: WebSocket, payload: dict[str, Any]) -> None:
     raw = json.dumps(payload)
-    if len(raw.encode()) > MAX_PAYLOAD:
+    encoded = raw.encode()
+    record_snapshot_bytes(len(encoded))
+    if len(encoded) > MAX_PAYLOAD:
         payload = {
             **payload,
             "data": {
@@ -125,10 +128,30 @@ async def _send_bounded(websocket: WebSocket, payload: dict[str, Any]) -> None:
     await websocket.send_text(raw)
 
 
+SEND_TIMEOUT_S = 1.0
+
+
+async def send_or_reset_buffer(
+    websocket: WebSocket,
+    outgoing: dict[str, Any],
+    buffer: SnapshotClientBuffer,
+    *,
+    timeout_s: float = SEND_TIMEOUT_S,
+) -> SnapshotClientBuffer:
+    """Send one snapshot. A slow client drops the payload and gets a fresh buffer."""
+    try:
+        await asyncio.wait_for(_send_bounded(websocket, outgoing), timeout=timeout_s)
+        return buffer
+    except TimeoutError:
+        SNAPSHOT_DROPPED.inc()
+        return SnapshotClientBuffer()
+
+
 async def _pump(websocket: WebSocket, game_id: str, *, operator: bool) -> None:
     del operator
     container = get_runtime_container()
     redis = container.redis
+    buffer = SnapshotClientBuffer()
     last_seq = -1
     if redis is None:
         while True:
@@ -142,7 +165,11 @@ async def _pump(websocket: WebSocket, game_id: str, *, operator: bool) -> None:
             if seq <= last_seq:
                 continue
             last_seq = seq
-            await _send_bounded(websocket, snapshot)
+            buffer.push(snapshot)
+            outgoing = buffer.pop_send()
+            if outgoing is not None:
+                buffer = await send_or_reset_buffer(websocket, outgoing, buffer)
+        return
     pubsub = redis.pubsub()  # type: ignore[no-untyped-call]
     pubsub.subscribe(f"game:{game_id}:snapshot")
     try:
@@ -154,7 +181,10 @@ async def _pump(websocket: WebSocket, game_id: str, *, operator: bool) -> None:
                 if seq < last_seq:
                     continue
                 last_seq = seq
-                await _send_bounded(websocket, data)
+                buffer.push(data)
+            outgoing = buffer.pop_send()
+            if outgoing is not None:
+                buffer = await send_or_reset_buffer(websocket, outgoing, buffer)
             try:
                 await asyncio.wait_for(websocket.receive_text(), timeout=0.01)
             except TimeoutError:

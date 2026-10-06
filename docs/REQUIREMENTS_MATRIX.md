@@ -36,7 +36,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R3.6 | Four leaderboards, ranks, archives, champions | M1 SQL; M2 Redis; M4 display | settlement + rotating snapshot board | period tests; overlay board rotation |
 | R3.7 | Operator console pages | M3 | `desktop/src/color_rush_desktop` nine pages + login | `pytest desktop/tests` 9 passed |
 | R3.8 | Prestige badges from finalized periods | M2/M4 | champion records in M1 | archive tests |
-| R3.9 | Backpressure, metrics, load, packaging, ops docs | M5 (M1 health only) | `/health/*` | health tests |
+| R3.9 | Backpressure, metrics, load, packaging, ops docs | M5 | observability metrics, Locust harness, `docs/OPERATIONS.md`, PyInstaller spec, `.gitlab-ci.yml` | ruff/mypy/pytest 118 passed; load subset/burst/2k unique measured — master 1k/5k/100k **not met** (see `docs/CAPACITY_REPORT.md`) |
 | R3.10 | Later extensions documented, not built | M1 docs | DECISIONS + this matrix | review |
 
 ## Master §4 Stack
@@ -50,7 +50,7 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R4.5 | Redis projections/streams | M2 | `infrastructure/redis` | `test_stale_projection_cannot_overwrite`, `test_zero_score_tie_order_matches_sql_policy`, `test_outbox_pending_recovery_dead_letters` passed |
 | R4.6 | Vite/TS/GSAP overlay | M4 | `overlay/` + GSAP npm, no CDN | `npm run test` 10 passed; `npm run build` |
 | R4.7 | Docker Compose backend | M1 | `compose.yaml`, Dockerfiles | `docker compose up -d postgres redis` healthy |
-| R4.8 | pytest, Qt tests, Vitest, Playwright, Locust | M1–M4 pytest/Qt/Vitest/Playwright; Locust M5 | overlay Vitest+Playwright | Playwright **6 passed** (1080/720 screenshots) |
+| R4.8 | pytest, Qt tests, Vitest, Playwright, Locust | M1–M5 | Locust extra + `scripts/load/` | pytest 118 passed / 1 skipped; Vitest 10; Playwright 6; Locust 2.46.7; subset/burst/2k unique ran — 1k/5k/100k **not met** |
 | R4.9 | Ruff + typecheck | M1 | Ruff/mypy config | `ruff` / `mypy` |
 | R4.10 | No SQLite for concurrency tests | M1 | PG-only integration | `test_deadline_closure_race` passed |
 
@@ -171,13 +171,13 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | R15.2 | Overlay vs operator credentials | M2 | overlay tickets vs JWT; Google secrets Fernet | overlay ticket tests; `SECURITY_AND_DATA.md` |
 | R15.3 | Compose healthchecks, least privilege | M1 | `compose.yaml`, Dockerfiles | compose config |
 | R15.4 | PowerShell + POSIX setup commands | M1 | README | command rehearsal |
-| R15.5 | Production TLS, backups, runbooks | M5 | — | — |
+| R15.5 | Production TLS, backups, runbooks | M5 | `deployment/compose.production.yaml`, Caddyfile, `scripts/backup.ps1`, `docs/OPERATIONS.md` | files reviewed; remote deploy **not executed** |
 
 ## Master §16 Scale
 
 | ID | Requirement | Milestone | Implementation | Verification |
 | --- | --- | --- | --- | --- |
-| R16.* | Locust harness and measured targets | M5 | — | — |
+| R16.* | Locust harness and measured targets | M5 | `scripts/load/run_harness.py`, Locust PipelineUser via `append_and_process` | subset 156 cmd/s; burst 225 cmd/s (target 5k **not met**); 2k unique reconcile ok, settle 40.7 s; 1k/10min and 100k unique **not run** — see `docs/CAPACITY_REPORT.md` |
 
 ## Master §17 Acceptance
 
@@ -195,6 +195,6 @@ Legend: M1 foundation · M2 ingest/API/realtime · M3 desktop · M4 overlay · M
 | A10 | Overlay lands on every color; reload phases | M4 | GSAP + snapshot reconstruct | Playwright spinning/gold/reload; OBS **blocked** |
 | A11 | Safe overlay text; 1080/720 screenshots | M4 | sanitize + Playwright | screenshots captured; no wagering UI |
 | A12 | Token/retention tests | M2 | JWT expiry, overlay tickets, 7-day command purge | `test_password_and_jwt_roundtrip`; live YouTube token revoke **blocked** |
-| A13 | Capacity evidence | M5 | — | — |
-| A14 | CI + packaging consistency | M5 (M1 local gates) | ruff/mypy/pytest | local commands |
-| A15 | Final progress report | M5 (M1 updates this file) | `docs/PROGRESS.md` | review |
+| A13 | Capacity evidence | M5 | `docs/CAPACITY_REPORT.md` | subset/burst/2k unique recorded; master 1k/5k/100k targets **not met** on this laptop |
+| A14 | CI + packaging consistency | M5 | `.gitlab-ci.yml`, PyInstaller spec, setup scripts | local ruff/mypy/pytest/overlay; GitLab pipeline **not executed** here; native PyInstaller artifact **not built** |
+| A15 | Final progress report | M5 | `docs/PROGRESS.md` | this milestone |

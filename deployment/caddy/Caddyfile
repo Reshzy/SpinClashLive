@@ -1,0 +1,16 @@
+{
+  http_port 80
+  https_port 443
+}
+
+# Replace color-rush.example with the real hostname and place TLS material
+# in deployment/caddy/certs or use Caddy's automatic certificates.
+color-rush.example {
+	reverse_proxy api:8000
+	encode gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		Referrer-Policy same-origin
+	}
+}

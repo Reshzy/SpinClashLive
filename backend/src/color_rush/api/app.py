@@ -4,6 +4,8 @@ import hashlib
 import json
 import time
 from collections import defaultdict
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -13,7 +15,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, generate_latest
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 
@@ -34,8 +36,9 @@ from color_rush.infrastructure.persistence.db import session_scope
 from color_rush.infrastructure.persistence.models import IdempotencyKey
 from color_rush.infrastructure.redis.projections import redis_available
 from color_rush.infrastructure.security import decode_access_token
+from color_rush.observability import configure_logging
+from color_rush.observability.metrics import record_http
 
-REQUESTS = Counter("color_rush_http_requests_total", "HTTP requests", ["path", "method"])
 _rate_buckets: dict[str, list[float]] = defaultdict(list)
 
 OVERLAY_PLACEHOLDER = """<!doctype html>
@@ -106,11 +109,25 @@ class SimSpin(BaseModel):
     forced: Color | None = None
 
 
+class SimCommandBatch(BaseModel):
+    session_id: str
+    broadcast_id: str = "sim-broadcast"
+    page_token: str | None = None
+    commands: list[SimCommand]
+
+
+@asynccontextmanager
+async def api_lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    configure_logging()
+    yield
+
+
 def create_app(container: AppContainer | None = None) -> FastAPI:
+    configure_logging()
     settings = (container or get_runtime_container()).settings if container else get_settings()
     if container is not None:
         set_runtime_container(container)
-    app = FastAPI(title="Color Rush Live", version="0.2.0")
+    app = FastAPI(title="Color Rush Live", version="0.2.0", lifespan=api_lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.origin_list,
@@ -140,6 +157,15 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
             host = request.client.host if request.client else ""
             if host not in {"127.0.0.1", "::1"}:
                 raise HTTPException(status_code=403, detail="metrics restricted")
+        try:
+            from color_rush.application.health import collect_operator_health
+
+            with session_scope(runtime.session_factory) as session:
+                collect_operator_health(
+                    session, runtime.redis, now=utc_now(), env=runtime.settings.color_rush_env
+                )
+        except Exception:
+            pass
         return PlainTextResponse(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     app.include_router(auth_router)
@@ -179,8 +205,8 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
 
     @app.middleware("http")
     async def _limits(request: Request, call_next):  # type: ignore[no-untyped-def]
-        REQUESTS.labels(path=request.url.path, method=request.method).inc()
         if request.headers.get("content-length") and int(request.headers["content-length"]) > 64_000:
+            record_http("oversized", request.method, 413)
             return JSONResponse(
                 error_body("payload_too_large", "payload too large", request_id_of(request)),
                 413,
@@ -190,6 +216,7 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
         bucket = _rate_buckets[ip]
         _rate_buckets[ip] = [stamp for stamp in bucket if now - stamp < 1.0]
         if len(_rate_buckets[ip]) > 40:
+            record_http("rate_limited", request.method, 429)
             return JSONResponse(
                 error_body("rate_limited", "slow down", request_id_of(request)),
                 429,
@@ -219,6 +246,12 @@ def create_app(container: AppContainer | None = None) -> FastAPI:
                     )
                 return JSONResponse(cached[1], status_code=cached[0])
         response = await call_next(request)
+        route = request.scope.get("route")
+        template = getattr(route, "path", request.url.path.split("?")[0] or "unmatched")
+        if "{" in str(template) or str(template).startswith("/"):
+            record_http(str(template)[:80], request.method, response.status_code)
+        else:
+            record_http("unmatched", request.method, response.status_code)
         if admin_write:
             chunks = [chunk async for chunk in response.body_iterator]
             payload = b"".join(chunks)
@@ -321,6 +354,46 @@ def _mount_simulation(app: FastAPI) -> None:
                 checkpoint=None,
             )
         return {"sequences": list(result.sequences), "decisions": [item.value for item in result.decisions]}
+
+    @app.post("/simulation/commands/batch")
+    def simulation_commands_batch(body: SimCommandBatch) -> dict[str, Any]:
+        from datetime import datetime
+
+        from color_rush.application.dto import SourceCheckpointData
+
+        container = get_runtime_container()
+        commands = [
+            NormalizedCommand(
+                provider="simulation",
+                provider_message_id=item.message_id,
+                broadcast_id=item.broadcast_id,
+                provider_channel_id=item.provider_channel_id,
+                display_name=item.display_name,
+                command_text=item.text,
+                command=parse_command(item.text),
+                published_at=datetime.fromisoformat(item.published_at),
+            )
+            for item in body.commands
+        ]
+        checkpoint = SourceCheckpointData(
+            broadcast_id=body.broadcast_id,
+            next_page_token=body.page_token,
+            source_mode="simulation",
+            ownership_token="simulation-load",
+            session_id=UUID(body.session_id),
+        )
+        with session_scope(container.session_factory) as session:
+            result = append_and_process(
+                session,
+                session_id=UUID(body.session_id),
+                commands=commands,
+                checkpoint=checkpoint,
+            )
+        return {
+            "sequences": list(result.sequences),
+            "decisions": [item.value for item in result.decisions],
+            "count": len(result.sequences),
+        }
 
     @app.post("/simulation/rounds/start")
     def simulation_start(body: SimStartRound) -> dict[str, Any]:

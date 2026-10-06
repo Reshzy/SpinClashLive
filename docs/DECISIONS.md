@@ -76,6 +76,11 @@ Ordinary choices resolved during milestone 1. Update when a decision changes a c
 | Desktop networking | QThread + httpx REST; QWebSocket on GUI thread | Master: one nonblocking strategy; all widget updates on GUI thread |
 | Desktop secrets | OS keyring service `color-rush-live` stores refresh token + API base | Never Google tokens or SQL/Redis |
 | Desktop packaging | PyInstaller spec `desktop/packaging/color_rush_desktop.spec` | Exclude .env and simulation data |
+| Load harness | Locust + `scripts/load/run_harness.py` calling `append_and_process` on simulation Postgres | No in-memory fast path; refuse `COLOR_RUSH_ENV=production` |
+| Redis rebuild | Shadow generation then atomic `active_generation` switch | `scripts/rebuild_redis.py` / `POST /api/v1/admin/projections/rebuild` |
+| Metrics | Low-cardinality Prometheus via `/metrics`; route templates not raw paths | No player/message ID labels |
+| Logs | structlog JSON with key redaction | Tokens, passwords, API keys redacted |
+| Production example | `deployment/compose.production.yaml` + Caddy TLS | Postgres/Redis stay on `internal`; API and worker also join `edge` so YouTube ingest can egress |
 
 ## Vocabulary
 

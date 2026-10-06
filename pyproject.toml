@@ -37,6 +37,9 @@ desktop = [
     "keyring>=25.5.0",
     "pyinstaller>=6.11.0",
 ]
+load = [
+    "locust>=2.32.0",
+]
 
 [project.scripts]
 color-rush-demo = "color_rush.demo:main"
@@ -98,6 +101,8 @@ module = [
     "keyring",
     "keyring.*",
     "color_rush.infrastructure.youtube.generated.*",
+    "locust",
+    "locust.*",
 ]
 ignore_missing_imports = true
 
@@ -119,6 +124,7 @@ markers = [
     "integration: PostgreSQL integration tests",
     "redis: Redis integration tests",
     "qt: PySide6 operator console tests",
+    "load: Locust/capacity harness subset",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning",

@@ -149,6 +149,13 @@ export interface SimCommand {
   message_id: string;
 }
 
+export interface SimCommandBatch {
+  session_id: string;
+  broadcast_id?: string;
+  page_token?: string | unknown;
+  commands: Array<SimCommand>;
+}
+
 export interface SimSpin {
   session_id: string;
   fence_token: number;
@@ -247,6 +254,7 @@ export type ApiPaths =
   | "/api/v1/players/{player_id}/ranks"
   | "/api/v1/periods"
   | "/api/v1/admin/health"
+  | "/api/v1/admin/projections/rebuild"
   | "/api/v1/admin/audit"
   | "/api/v1/admin/games"
   | "/api/v1/admin/sessions"
@@ -276,6 +284,7 @@ export type ApiPaths =
   | "/api/v1/admin/periods/finalize"
   | "/api/v1/admin/source"
   | "/simulation/commands"
+  | "/simulation/commands/batch"
   | "/simulation/rounds/start"
   | "/simulation/rounds/close"
   | "/simulation/rounds/drain"

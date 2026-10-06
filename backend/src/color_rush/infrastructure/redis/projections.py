@@ -159,6 +159,13 @@ def recent_history(client: Redis, game_id: UUID) -> list[str]:
     return [str(item) for item in client.lrange(history_key(game_id), 0, 19)]
 
 
+def rebuild_all_leaderboards(client: Redis, session: Session, game_id: UUID) -> dict[str, int]:
+    generations: dict[str, int] = {}
+    for period in active_periods(session, game_id):
+        generations[str(period.id)] = rebuild_leaderboard(client, session, game_id, period.id)
+    return generations
+
+
 def rebuild_leaderboard(client: Redis, session: Session, game_id: UUID, period_id: UUID) -> int:
     current = int(client.get(gen_key(game_id, period_id)) or 1)
     shadow = current + 1

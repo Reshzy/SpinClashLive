@@ -30,6 +30,7 @@ from color_rush.infrastructure.redis.projections import (
     top_n,
 )
 from color_rush.infrastructure.security import new_token
+from color_rush.observability.metrics import record_snapshot_bytes
 
 HELP_CARD = {
     "title": "Color Rush Live",
@@ -178,6 +179,9 @@ def build_snapshot(
     if redis_available(redis):
         seq = store_snapshot(redis, game_session.game_id, envelope)
         envelope["snapshot_sequence"] = seq
+    from json import dumps
+
+    record_snapshot_bytes(len(dumps(envelope).encode()))
     return envelope
 
 

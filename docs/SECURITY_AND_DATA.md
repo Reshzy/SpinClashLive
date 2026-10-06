@@ -36,6 +36,8 @@ Long-term identity and leaderboard retention, and the proposed game use case, ne
 
 Do not reward watch time, subscriptions, paid messages, or donations. Super Chat and membership events are ignored for scoring.
 
+If a Google API key or OAuth client secret was ever committed (including an older `.env.example`), rotate it in Cloud Console. `.env.example` must contain empty placeholders only.
+
 ## Credentials and transport
 
 - Operator JWT access + hashed refresh sessions

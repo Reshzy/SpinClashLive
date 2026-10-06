@@ -1,0 +1,129 @@
+# Local CI for Color Rush Live. No production secrets.
+# Integration jobs need Docker services; overlay jobs need Node.
+
+stages:
+  - lint
+  - test
+  - overlay
+
+default:
+  interruptible: true
+
+variables:
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+  COLOR_RUSH_ENV: simulation
+  POSTGRES_USER: color_rush
+  POSTGRES_PASSWORD: color_rush
+  POSTGRES_DB: color_rush_test
+
+.python:
+  image: python:3.12-bookworm
+  cache:
+    key:
+      files:
+        - uv.lock
+    paths:
+      - .cache/uv
+  before_script:
+    - pip install --quiet uv
+    - uv python install 3.12
+    - uv sync --extra dev --frozen
+
+ruff:
+  extends: .python
+  stage: lint
+  script:
+    - uv run ruff check backend/src backend/tests desktop/src desktop/tests scripts
+    - uv run python scripts/secret_scan.py
+    - uv run python scripts/check_contracts.py
+  rules:
+    - if: $CI_PIPELINE_SOURCE
+
+mypy:
+  extends: .python
+  stage: lint
+  needs: []
+  script:
+    - uv run mypy
+  rules:
+    - if: $CI_PIPELINE_SOURCE
+
+pytest-domain:
+  extends: .python
+  stage: test
+  needs: ["ruff"]
+  script:
+    - uv run pytest backend/tests/domain backend/tests/application -q --ignore=backend/tests/application/test_migration_ddl.py
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - .pytest_cache
+  rules:
+    - if: $CI_PIPELINE_SOURCE
+
+pytest-qt:
+  extends: .python
+  stage: test
+  needs: ["ruff"]
+  variables:
+    QT_QPA_PLATFORM: offscreen
+  before_script:
+    - pip install --quiet uv
+    - uv python install 3.12
+    - uv sync --extra dev --extra desktop --frozen
+  script:
+    - uv run pytest desktop/tests -q
+  rules:
+    - if: $CI_PIPELINE_SOURCE
+
+pytest-integration:
+  extends: .python
+  stage: test
+  needs: ["ruff"]
+  services:
+    - name: postgres:16-alpine
+      alias: postgres
+    - name: redis:7-alpine
+      alias: redis
+  variables:
+    COLOR_RUSH_TEST_DATABASE_URL: postgresql+psycopg://color_rush:color_rush@postgres:5432/color_rush_test
+    COLOR_RUSH_TEST_REDIS_URL: redis://redis:6379/15
+    DATABASE_URL: postgresql+psycopg://color_rush:color_rush@postgres:5432/color_rush_test
+    POSTGRES_DB: color_rush_test
+  script:
+    - uv run pytest backend/tests/integration -q
+  artifacts:
+    when: on_failure
+    expire_in: 7 days
+    paths:
+      - .pytest_cache
+  rules:
+    - if: $CI_PIPELINE_SOURCE
+
+overlay:
+  image: node:22-bookworm
+  stage: overlay
+  needs: []
+  cache:
+    key:
+      files:
+        - overlay/package-lock.json
+    paths:
+      - overlay/node_modules
+  before_script:
+    - cd overlay
+    - npm ci
+  script:
+    - npm run typecheck
+    - npm run test
+    - npx playwright install --with-deps chromium
+    - npm run test:e2e
+    - npm run build
+  artifacts:
+    expire_in: 7 days
+    paths:
+      - overlay/dist
+      - overlay/tests/e2e/screenshots
+  rules:
+    - if: $CI_PIPELINE_SOURCE

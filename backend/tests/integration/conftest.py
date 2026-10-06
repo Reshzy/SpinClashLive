@@ -99,6 +99,23 @@ def coordinator(db_session: Session, clock: FrozenClock) -> Coordinator:
 
 
 @pytest.fixture
+def redis_client() -> Iterator[object]:
+    url = os.environ.get("COLOR_RUSH_TEST_REDIS_URL", "redis://127.0.0.1:6379/15")
+    from redis import Redis
+    from redis.exceptions import RedisError
+
+    client = Redis.from_url(url, decode_responses=True)
+    try:
+        client.ping()
+    except RedisError as exc:
+        pytest.skip(f"Redis unavailable: {exc}")
+    client.flushdb()
+    yield client
+    client.flushdb()
+    client.close()
+
+
+@pytest.fixture
 def started_session(coordinator: Coordinator, db_session: Session) -> tuple[object, int]:
     game = coordinator.create_game()
     db_session.flush()

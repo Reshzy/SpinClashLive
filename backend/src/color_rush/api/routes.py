@@ -42,8 +42,8 @@ from color_rush.api.schemas import (
     YoutubeOAuthStartRequest,
 )
 from color_rush.application.auth import create_admin_user, list_admin_users, login, logout, refresh_tokens, require_role
+from color_rush.application.health import collect_operator_health
 from color_rush.application.moderation import set_moderation
-from color_rush.application.outbox import sweep_incomplete_jobs
 from color_rush.application.overlay_tickets import (
     create_overlay_ticket,
     exchange_overlay_ws_ticket,
@@ -80,7 +80,6 @@ from color_rush.infrastructure.persistence.models import (
     Round,
     SourceCheckpoint,
 )
-from color_rush.infrastructure.redis.projections import redis_available
 
 auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 game_router = APIRouter(prefix="/api/v1", tags=["game"])
@@ -321,16 +320,34 @@ def admin_health(
     user: Annotated[AdminUser, Depends(current_user)],
 ) -> dict[str, Any]:
     del user
-    redis_ok = redis_available(container.redis)
-    game_session = session.scalar(select(GameSession).order_by(GameSession.created_at.desc()))
-    source = session_source_health(session, game_session).value if game_session else "healthy"
-    return {
-        "postgres": True,
-        "redis": redis_ok,
-        "source": source,
-        "jobs": sweep_incomplete_jobs(session),
-        "env": container.settings.color_rush_env,
-    }
+    return collect_operator_health(
+        session,
+        container.redis,
+        now=utc_now(),
+        env=container.settings.color_rush_env,
+    )
+
+
+@admin_router.post("/projections/rebuild")
+def admin_rebuild_projections(
+    session: Annotated[Session, Depends(db_session)],
+    container: Annotated[AppContainer, Depends(container_dep)],
+    user: Annotated[AdminUser, Depends(require_permission("settings"))],
+    game_id: UUID | None = None,
+) -> dict[str, Any]:
+    del user
+    if container.redis is None:
+        return {"status": "redis_unavailable", "generations": {}}
+    from color_rush.infrastructure.redis.projections import rebuild_all_leaderboards
+
+    target = game_id
+    if target is None:
+        game_session = session.scalar(select(GameSession).order_by(GameSession.created_at.desc()))
+        if game_session is None:
+            return {"status": "no_session", "generations": {}}
+        target = game_session.game_id
+    generations = rebuild_all_leaderboards(container.redis, session, target)
+    return {"status": "rebuilt", "game_id": str(target), "generations": generations}
 
 
 @admin_router.get("/audit")
@@ -684,11 +701,15 @@ def admin_delete_player(
     row = delete_player_data(
         session, player_id=player_id, actor_id=user.id, now=utc_now(), request_id=request.headers.get("idempotency-key")
     )
-    if container.redis is not None and game_id is not None:
+    if container.redis is not None:
         from color_rush.infrastructure.redis.projections import delete_player_keys
 
-        periods = list_periods(session, game_id)
-        delete_player_keys(container.redis, game_id, player_id, [item.id for item in periods])
+        games = list(session.scalars(select(Game)))
+        for game in games:
+            if game_id is not None and game.id != game_id:
+                continue
+            periods = list_periods(session, game.id)
+            delete_player_keys(container.redis, game.id, player_id, [item.id for item in periods])
     return {"status": "anonymized", "player_id": str(row.id)}
 
 

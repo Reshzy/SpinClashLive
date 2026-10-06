@@ -29,6 +29,7 @@ from color_rush.infrastructure.persistence.models import (
     Round,
     SourceCheckpoint,
 )
+from color_rush.observability.metrics import record_decision, record_duplicate
 
 
 def _get_or_create_player(
@@ -102,6 +103,7 @@ def append_and_process(
             )
         )
         if duplicate is not None:
+            record_duplicate()
             continue
         parsed = command.command if command.command is not None else parse_command(command.command_text)
         seq = game_session.next_inbox_sequence
@@ -186,6 +188,9 @@ def append_and_process(
             continue
         decision = _apply_inbox_pick(session, active_round, row, parsed)
         decisions.append(decision)
+
+    for decision in decisions:
+        record_decision(decision.value)
 
     if checkpoint is not None:
         existing = session.get(SourceCheckpoint, checkpoint.broadcast_id)

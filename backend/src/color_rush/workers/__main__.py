@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import select
 
 from color_rush.application.auth import bootstrap_owner
+from color_rush.application.health import collect_operator_health
 from color_rush.application.ingest import append_and_process
 from color_rush.application.outbox import relay_outbox, sweep_incomplete_jobs
 from color_rush.application.periods import finalize_due_periods
@@ -178,6 +179,12 @@ def _tick_retention(container: AppContainer) -> None:
         for game_session in session.scalars(select(GameSession)):
             finalize_due_periods(session, game_session.game_id, container.clock.now())
         bootstrap_owner(session, container.settings, datetime.now(tz=container.clock.now().tzinfo))
+        collect_operator_health(
+            session,
+            container.redis,
+            now=container.clock.now(),
+            env=container.settings.color_rush_env,
+        )
 
 
 def _session_ids(container: AppContainer) -> list[object]:

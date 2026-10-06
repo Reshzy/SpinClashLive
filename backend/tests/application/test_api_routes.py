@@ -20,7 +20,9 @@ def test_health_and_versioned_routes_registered() -> None:
     assert "/api/v1/periods/{period_id}/champions" in paths
     assert "/api/v1/periods/{period_id}/archives" in paths
     assert "/simulation/commands" in paths
+    assert "/simulation/commands/batch" in paths
     assert "/metrics" in paths
+    assert "/api/v1/admin/projections/rebuild" in paths
     from color_rush.api.ws import ws_router
 
     included = {getattr(route, "path", "") for route in ws_router.routes}
